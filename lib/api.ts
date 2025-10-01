@@ -12,25 +12,25 @@ let apiBaseUrl = "https://qqdl.site/api"
 
 export const setApiBaseUrl = (url: string) => {
   apiBaseUrl = url
-  console.log("[v0] API base URL set to:", url)
+  console.log("API base URL set to:", url)
 }
 
 export const getApiBaseUrl = () => apiBaseUrl
 
 export const searchMusic = async (query: string): Promise<Album[]> => {
   const url = `${apiBaseUrl}/get-music?q=${encodeURIComponent(query)}&offset=0&type=track`
-  console.log("[v0] Searching music:", url)
+  console.log("Searching music:", url)
 
   try {
     const response = await fetch(url)
 
     if (!response.ok) {
-      console.error("[v0] Search failed with status:", response.status, response.statusText)
+      console.error("Search failed with status:", response.status, response.statusText)
       throw new Error(`Failed to search music: ${response.status}`)
     }
 
     const data: SearchResponse = await response.json()
-    console.log("[v0] Search response success:", data.success, "Albums found:", data.data?.albums?.items?.length || 0)
+    console.log("Search response success:", data.success, "Albums found:", data.data?.albums?.items?.length || 0)
 
     if (!data.success) {
       throw new Error("Search failed")
@@ -38,20 +38,20 @@ export const searchMusic = async (query: string): Promise<Album[]> => {
 
     return data.data.albums.items
   } catch (error) {
-    console.error("[v0] Search error:", error)
+    console.error("Search error:", error)
     throw error
   }
 }
 
 export const getAlbumDetails = async (albumId: string): Promise<AlbumDetails> => {
   const url = `${apiBaseUrl}/get-album?album_id=${albumId}`
-  console.log("[v0] Fetching album:", url)
+  console.log("Fetching album:", url)
 
   try {
     const response = await fetch(url)
 
     if (!response.ok) {
-      console.error("[v0] Album fetch failed with status:", response.status, response.statusText)
+      console.error("Album fetch failed with status:", response.status, response.statusText)
       throw new Error(`Failed to fetch album details: ${response.status}`)
     }
 
@@ -61,23 +61,23 @@ export const getAlbumDetails = async (albumId: string): Promise<AlbumDetails> =>
       throw new Error("Failed to load album")
     }
 
-    console.log("[v0] Album loaded:", data.data.title, "Tracks:", data.data.tracks.items.length)
+    console.log("Album loaded:", data.data.title, "Tracks:", data.data.tracks.items.length)
     return data.data
   } catch (error) {
-    console.error("[v0] Album fetch error:", error)
+    console.error("Album fetch error:", error)
     throw error
   }
 }
 
 export const getArtistDetails = async (artistId: number) => {
   const url = `${apiBaseUrl}/get-artist?artist_id=${artistId}`
-  console.log("[v0] Fetching artist:", url)
+  console.log("Fetching artist:", url)
 
   try {
     const response = await fetch(url)
 
     if (!response.ok) {
-      console.error("[v0] Artist fetch failed with status:", response.status, response.statusText)
+      console.error("Artist fetch failed with status:", response.status, response.statusText)
       throw new Error(`Failed to fetch artist details: ${response.status}`)
     }
 
@@ -87,22 +87,22 @@ export const getArtistDetails = async (artistId: number) => {
       throw new Error("Failed to load artist")
     }
 
-    console.log("[v0] Artist loaded:", data.data.artist.name.display)
+    console.log("Artist loaded:", data.data.artist.name.display)
     return data.data.artist
   } catch (error) {
-    console.error("[v0] Artist fetch error:", error)
+    console.error("Artist fetch error:", error)
     throw error
   }
 }
 
 export const getTrackStreamUrl = async (trackId: string): Promise<string> => {
   const url = `${apiBaseUrl}/download-music?track_id=${trackId}`
-  console.log("[v0] Fetching stream URL for track:", trackId, "from:", url)
+  console.log("Fetching stream URL for track:", trackId, "from:", url)
 
   try {
     const response = await fetch(url)
 
-    console.log("[v0] Stream URL fetch response:", {
+    console.log("Stream URL fetch response:", {
       status: response.status,
       statusText: response.statusText,
       headers: {
@@ -113,12 +113,12 @@ export const getTrackStreamUrl = async (trackId: string): Promise<string> => {
     })
 
     if (!response.ok) {
-      console.error("[v0] Stream URL fetch failed with status:", response.status, response.statusText)
+      console.error("Stream URL fetch failed with status:", response.status, response.statusText)
       throw new Error(`Failed to fetch stream URL: ${response.status}`)
     }
 
     const data: StreamResponse = await response.json()
-    console.log("[v0] Stream URL response:", {
+    console.log("Stream URL response:", {
       success: data.success,
       hasUrl: !!data.data?.url,
       urlLength: data.data?.url?.length,
@@ -131,20 +131,20 @@ export const getTrackStreamUrl = async (trackId: string): Promise<string> => {
 
     try {
       const testResponse = await fetch(data.data.url, { method: "HEAD" })
-      console.log("[v0] Stream URL accessibility test:", {
+      console.log("Stream URL accessibility test:", {
         status: testResponse.status,
         statusText: testResponse.statusText,
         contentType: testResponse.headers.get("content-type"),
         cors: testResponse.headers.get("access-control-allow-origin"),
       })
     } catch (testError) {
-      console.error("[v0] Stream URL accessibility test failed:", testError)
+      console.error("Stream URL accessibility test failed:", testError)
     }
 
-    console.log("[v0] Stream URL obtained successfully")
+    console.log("Stream URL obtained successfully")
     return data.data.url
   } catch (error) {
-    console.error("[v0] Stream URL fetch error:", error)
+    console.error("Stream URL fetch error:", error)
     throw error
   }
 }
