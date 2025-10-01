@@ -35,7 +35,7 @@ export const useAudioPlayer = () => {
       setStreamUrl(url)
       hasAttemptedPlayRef.current = false
     } catch (error) {
-      console.error("[v0] Failed to load stream URL:", error)
+      console.error("Failed to load stream URL:", error)
       setIsPlaying(false)
       setStreamUrl(null)
     } finally {
@@ -132,7 +132,7 @@ export const useAudioPlayer = () => {
           }
         }
 
-        console.error("[v0] Audio playback error:", {
+        console.error("Audio playback error:", {
           errorCode,
           message: errorMessage,
           mediaErrorCode: error?.code,
@@ -147,7 +147,7 @@ export const useAudioPlayer = () => {
 
     return () => {
       if (audioRef.current) {
-        console.log("[v0] Cleaning up audio element")
+        console.log("Cleaning up audio element")
         audioRef.current.pause()
         audioRef.current.src = ""
       }
@@ -239,7 +239,7 @@ export const useAudioPlayer = () => {
             return
           }
 
-          console.error("[v0] Playback failed:", {
+          console.error("Playback failed:", {
             name: error.name,
             message: error.message,
           })

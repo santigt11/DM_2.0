@@ -12,7 +12,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setApiBaseUrl(apiBaseUrl)
-    console.log("[v0] Initialized API base URL:", apiBaseUrl)
+    console.log("Initialized API base URL:", apiBaseUrl)
   }, [apiBaseUrl])
 
   useEffect(() => {

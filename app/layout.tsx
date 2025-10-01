@@ -17,7 +17,6 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   title: "qstream - Music Player",
   description: "A modern, cross-platform music streaming player",
-    generator: 'v0.app'
 }
 
 export default function RootLayout({
