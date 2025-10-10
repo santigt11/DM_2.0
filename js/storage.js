@@ -1,0 +1,61 @@
+export const apiSettings = {
+    STORAGE_KEY: 'monochrome-api-instances',
+    defaultInstances: [
+        'https://triton.squid.wtf',
+        'https://kraken.squid.wtf',
+        'https://zeus.squid.wtf',
+        'https://aether.squid.wtf',
+        'https://tidal.401658.xyz'
+    ],
+    
+    getInstances() {
+        try {
+            const stored = localStorage.getItem(this.STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [...this.defaultInstances];
+        } catch (e) {
+            return [...this.defaultInstances];
+        }
+    },
+    
+    saveInstances(instances) {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(instances));
+    }
+};
+
+export const recentActivityManager = {
+    STORAGE_KEY: 'monochrome-recent-activity',
+    LIMIT: 10,
+    
+    _get() {
+        try {
+            const data = localStorage.getItem(this.STORAGE_KEY);
+            return data ? JSON.parse(data) : { artists: [], albums: [] };
+        } catch (e) {
+            return { artists: [], albums: [] };
+        }
+    },
+    
+    _save(data) {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+    },
+    
+    getRecents() {
+        return this._get();
+    },
+    
+    _add(type, item) {
+        const data = this._get();
+        data[type] = data[type].filter(i => i.id !== item.id);
+        data[type].unshift(item);
+        data[type] = data[type].slice(0, this.LIMIT);
+        this._save(data);
+    },
+    
+    addArtist(artist) {
+        this._add('artists', artist);
+    },
+    
+    addAlbum(album) {
+        this._add('albums', album);
+    }
+};
