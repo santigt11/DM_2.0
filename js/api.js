@@ -445,4 +445,76 @@ async searchAlbums(query) {
     getCacheStats() {
         return this.cache.getCacheStats();
     }
+
+    extractTidalPlaylistId(url) {
+        try {
+            const urlObj = new URL(url);
+            const match = urlObj.pathname.match(/\/playlist\/(\d+)/);
+            return match ? match[1] : null;
+        } catch {
+            const match = url.match(/(?:tidal\.com\/)?playlist\/(\d+)/i);
+            return match ? match[1] : null;
+        }
+    }
+
+    extractSpotifyPlaylistId(url) {
+        try {
+            const urlObj = new URL(url);
+            const match = urlObj.pathname.match(/\/playlist\/([a-zA-Z0-9]+)/);
+            return match ? match[1] : null;
+        } catch {
+            const match = url.match(/(?:spotify\.com\/)?playlist\/([a-zA-Z0-9]+)/i);
+            return match ? match[1] : null;
+        }
+    }
+
+    async getTidalPlaylist(id) {
+        const cached = await this.cache.get('tidal_playlist', id);
+        if (cached) return cached;
+
+        try {
+            const response = await this.fetchWithRetry(`/playlist/?id=${id}`);
+            const data = await response.json();
+            const entries = Array.isArray(data) ? data : [data];
+
+            let playlist, tracksSection;
+            
+            for (const entry of entries) {
+                if (!entry || typeof entry !== 'object') continue;
+                
+                if (!playlist && ('numberOfTracks' in entry || 'name' in entry)) {
+                    playlist = entry;
+                }
+                
+                if (!tracksSection && 'items' in entry && Array.isArray(entry.items)) {
+                    tracksSection = entry;
+                }
+            }
+
+            if (!playlist) throw new Error('Playlist not found');
+
+            const tracks = (tracksSection?.items || []).map(i => this.prepareTrack(i.item || i));
+            const result = { playlist, tracks };
+
+            await this.cache.set('tidal_playlist', id, result);
+            return result;
+        } catch (error) {
+            console.error('Failed to fetch TIDAL playlist:', error);
+            throw error;
+        }
+    }
+
+    async getSpotifyPlaylistTracks(playlistId) {
+        // Nota: Esta es una funcionalidad limitada que busca por nombre/descripción
+        // Spotify requiere OAuth para acceso a playlists privadas
+        // Por ahora, intentamos buscar por nombre
+        try {
+            // Como no tenemos acceso directo a Spotify API sin OAuth,
+            // devolvemos un error indicativo
+            throw new Error('Spotify playlists require OAuth authentication. Please use TIDAL playlist links instead.');
+        } catch (error) {
+            console.error('Spotify integration not available:', error);
+            throw error;
+        }
+    }
 }

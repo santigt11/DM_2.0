@@ -260,9 +260,12 @@ export class UIRenderer {
             this.renderListWithTracks(tracklistContainer, tracks, false);
             
             recentActivityManager.addAlbum(album);
+            
+            return tracks;
         } catch (error) {
             console.error("Failed to load album:", error);
             tracklistContainer.innerHTML = createPlaceholder(`Could not load album details. ${error.message}`);
+            return [];
         }
     }
 

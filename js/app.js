@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hamburgerBtn = document.getElementById('hamburger-btn');
 
     let contextTrack = null;
+    let currentAlbumTracks = [];
 
     document.querySelectorAll('.search-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -60,7 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.renderSearchPage(decodeURIComponent(param));
                 break;
             case 'album':
-                ui.renderAlbumPage(param);
+                ui.renderAlbumPage(param).then(tracks => {
+                    currentAlbumTracks = tracks || [];
+                }).catch(err => console.error(err));
                 break;
             case 'artist':
                 ui.renderArtistPage(param);
@@ -75,11 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderQueue = () => {
-        if (!queueModalOverlay.style.display || queueModalOverlay.style.display === "none") {
-            return;
-        }
-        
         const currentQueue = player.getCurrentQueue();
+        console.log('renderQueue called, queue length:', currentQueue.length);
         
         if (currentQueue.length === 0) {
             queueList.innerHTML = '<div class="placeholder-text">Queue is empty.</div>';
@@ -153,6 +153,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (action === 'add-to-queue' && contextTrack) {
             player.addToQueue(contextTrack);
             renderQueue();
+            
+            const notification = document.createElement('div');
+            notification.textContent = `✓ Added "${contextTrack.title}" to queue`;
+            notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
         } else if (action === 'download' && contextTrack) {
             const filename = buildTrackFilename(contextTrack, QUALITY);
             
@@ -175,6 +181,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         contextMenu.style.display = 'none';
+    });
+
+    // Album Actions
+    const addAlbumToQueueBtn = document.getElementById('add-album-to-queue-btn');
+    const playlistLinkBtn = document.getElementById('playlist-link-btn');
+
+    addAlbumToQueueBtn?.addEventListener('click', () => {
+        console.log('Add All to Queue clicked, currentAlbumTracks:', currentAlbumTracks.length);
+        if (currentAlbumTracks.length > 0) {
+            player.addMultipleToQueue(currentAlbumTracks);
+            renderQueue();
+            
+            const notification = document.createElement('div');
+            notification.textContent = `✓ Added ${currentAlbumTracks.length} tracks to queue`;
+            notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        } else {
+            console.warn('No tracks in currentAlbumTracks');
+        }
+    });
+
+    playlistLinkBtn?.addEventListener('click', async () => {
+        const playlistUrl = prompt('Enter TIDAL Playlist URL:', '');
+        if (!playlistUrl) return;
+
+        try {
+            const playlistId = api.extractTidalPlaylistId(playlistUrl);
+            
+            if (!playlistId) {
+                // Intentar con Spotify
+                const spotifyId = api.extractSpotifyPlaylistId(playlistUrl);
+                if (spotifyId) {
+                    throw new Error('Spotify playlists require OAuth. Please use TIDAL playlist links.');
+                }
+                throw new Error('Invalid playlist URL. Please use a valid TIDAL or Spotify URL.');
+            }
+
+            const notification = document.createElement('div');
+            notification.textContent = 'Loading playlist...';
+            notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+            document.body.appendChild(notification);
+
+            const { playlist, tracks } = await api.getTidalPlaylist(playlistId);
+            
+            player.addMultipleToQueue(tracks);
+            renderQueue();
+            
+            notification.textContent = `✓ Added ${tracks.length} tracks from "${playlist.name || 'Playlist'}" to queue`;
+            setTimeout(() => notification.remove(), 4000);
+        } catch (error) {
+            alert(`Error loading playlist: ${error.message}`);
+        }
     });
 
     const performSearch = debounce((query) => {

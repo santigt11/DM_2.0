@@ -1,7 +1,7 @@
 import { REPEAT_MODE, SVG_PLAY, SVG_PAUSE, formatTime } from './utils.js';
 
 export class Player {
-    constructor(audioElement, api, quality = 'LOSSLESS') {
+    constructor(audioElement, api, quality = 'HI_RES_LOSSLESS') {
         this.audio = audioElement;
         this.api = api;
         this.quality = quality;
@@ -188,6 +188,18 @@ export class Player {
 
     addToQueue(track) {
         this.queue.push(track);
+        if (this.shuffleActive) {
+            this.shuffledQueue.push(track);
+        }
+    }
+
+    addMultipleToQueue(tracks) {
+        if (Array.isArray(tracks)) {
+            this.queue.push(...tracks);
+            if (this.shuffleActive) {
+                this.shuffledQueue.push(...tracks);
+            }
+        }
     }
 
     getCurrentQueue() {
