@@ -202,6 +202,74 @@ export class Player {
         }
     }
 
+    clearQueue() {
+        this.queue = [];
+        this.shuffledQueue = [];
+        this.currentQueueIndex = 0;
+        
+        // Si hay reproducción activa, pausar
+        if (this.audio && !this.audio.paused) {
+            this.pause();
+        }
+    }
+
+    removeFromQueue(index) {
+        const currentQueue = this.getCurrentQueue();
+        
+        // Validar índice
+        if (index < 0 || index >= currentQueue.length) {
+            console.warn('Invalid queue index:', index);
+            return;
+        }
+
+        // Determinar qué colas actualizar
+        if (this.shuffleActive) {
+            // Remover de shuffledQueue
+            const track = this.shuffledQueue[index];
+            this.shuffledQueue.splice(index, 1);
+            
+            // También remover de queue normal
+            const normalIndex = this.queue.findIndex(t => t.id === track.id);
+            if (normalIndex !== -1) {
+                this.queue.splice(normalIndex, 1);
+            }
+        } else {
+            // Remover de queue normal
+            const track = this.queue[index];
+            this.queue.splice(index, 1);
+            
+            // También remover de shuffledQueue si existe
+            if (this.shuffledQueue.length > 0) {
+                const shuffledIndex = this.shuffledQueue.findIndex(t => t.id === track.id);
+                if (shuffledIndex !== -1) {
+                    this.shuffledQueue.splice(shuffledIndex, 1);
+                }
+            }
+        }
+
+        // Ajustar currentQueueIndex si es necesario
+        if (index < this.currentQueueIndex) {
+            // Si removemos una canción anterior a la actual, decrementar índice
+            this.currentQueueIndex--;
+        } else if (index === this.currentQueueIndex) {
+            // Si removemos la canción actual, pausar y reproducir la siguiente
+            if (this.audio && !this.audio.paused) {
+                this.pause();
+                // Si quedan canciones, reproducir la que ahora está en ese índice
+                if (currentQueue.length > 0) {
+                    // Ajustar índice si estamos al final
+                    if (this.currentQueueIndex >= currentQueue.length) {
+                        this.currentQueueIndex = currentQueue.length - 1;
+                    }
+                    this.play(currentQueue[this.currentQueueIndex]);
+                } else {
+                    // Queue vacía, resetear
+                    this.currentQueueIndex = 0;
+                }
+            }
+        }
+    }
+
     getCurrentQueue() {
         return this.shuffleActive ? this.shuffledQueue : this.queue;
     }

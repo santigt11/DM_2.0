@@ -449,10 +449,11 @@ async searchAlbums(query) {
     extractTidalPlaylistId(url) {
         try {
             const urlObj = new URL(url);
-            const match = urlObj.pathname.match(/\/playlist\/(\d+)/);
+            // Acepta tanto IDs numéricos como UUIDs
+            const match = urlObj.pathname.match(/\/playlist\/([a-zA-Z0-9\-]+)/);
             return match ? match[1] : null;
         } catch {
-            const match = url.match(/(?:tidal\.com\/)?playlist\/(\d+)/i);
+            const match = url.match(/(?:tidal\.com\/)?(?:browse\/)?playlist\/([a-zA-Z0-9\-]+)/i);
             return match ? match[1] : null;
         }
     }
@@ -468,52 +469,139 @@ async searchAlbums(query) {
         }
     }
 
-    async getTidalPlaylist(id) {
-        const cached = await this.cache.get('tidal_playlist', id);
+    async getSpotifyPlaylist(playlistId) {
+        const cached = await this.cache.get('spotify_playlist', playlistId);
         if (cached) return cached;
 
         try {
-            const response = await this.fetchWithRetry(`/playlist/?id=${id}`);
-            const data = await response.json();
-            const entries = Array.isArray(data) ? data : [data];
-
-            let playlist, tracksSection;
+            console.log('Fetching Spotify playlist:', playlistId);
             
-            for (const entry of entries) {
-                if (!entry || typeof entry !== 'object') continue;
+            // Usar un proxy CORS o la API embebida de Spotify
+            // Primero intentamos con la API directa (algunas playlists públicas funcionan)
+            let tracks = [];
+            let playlistName = 'Spotify Playlist';
+            
+            try {
+                // Intentar obtener datos básicos de la playlist usando oembed
+                const oembedUrl = `https://open.spotify.com/oembed?url=https://open.spotify.com/playlist/${playlistId}`;
+                const oembedResponse = await fetch(oembedUrl);
                 
-                if (!playlist && ('numberOfTracks' in entry || 'name' in entry)) {
-                    playlist = entry;
+                if (oembedResponse.ok) {
+                    const oembedData = await oembedResponse.json();
+                    playlistName = oembedData.title || playlistName;
+                    console.log('Playlist name:', playlistName);
+                }
+            } catch (err) {
+                console.warn('Could not fetch playlist metadata:', err);
+            }
+            
+            // Como no podemos acceder directamente por CORS, pedirle al usuario que nos dé los nombres
+            const userInput = prompt(
+                `Please paste the track list from Spotify playlist "${playlistName}".\n\n` +
+                `Format: One track per line as "Artist - Track Name"\n\n` +
+                `Tip: You can copy the track list from Spotify web player.`,
+                ''
+            );
+            
+            if (!userInput || userInput.trim() === '') {
+                throw new Error('No tracks provided');
+            }
+            
+            // Parsear el input del usuario
+            const lines = userInput.split('\n').filter(line => line.trim());
+            console.log(`Parsing ${lines.length} tracks from user input`);
+            
+            const searchPromises = [];
+            
+            for (const line of lines) {
+                const cleanLine = line.trim();
+                if (!cleanLine) continue;
+                
+                // Intentar parsear diferentes formatos
+                let artistName, trackTitle;
+                
+                if (cleanLine.includes(' - ')) {
+                    [artistName, trackTitle] = cleanLine.split(' - ').map(s => s.trim());
+                } else if (cleanLine.includes(' – ')) {
+                    [artistName, trackTitle] = cleanLine.split(' – ').map(s => s.trim());
+                } else {
+                    // Solo el nombre de la canción
+                    trackTitle = cleanLine;
+                    artistName = '';
                 }
                 
-                if (!tracksSection && 'items' in entry && Array.isArray(entry.items)) {
-                    tracksSection = entry;
+                if (!trackTitle) continue;
+                
+                const query = artistName ? `${artistName} ${trackTitle}` : trackTitle;
+                console.log(`Searching for: ${query}`);
+                
+                // Buscar la canción en nuestro servidor
+                searchPromises.push(
+                    this.searchTracks(query)
+                        .then(result => {
+                            const results = result.items || [];
+                            if (results.length > 0) {
+                                // Buscar la mejor coincidencia
+                                if (artistName) {
+                                    for (const found of results.slice(0, 3)) {
+                                        if (!found || !found.title || !found.artist) continue;
+                                        
+                                        const titleMatch = found.title.toLowerCase().includes(trackTitle.toLowerCase()) ||
+                                                         trackTitle.toLowerCase().includes(found.title.toLowerCase());
+                                        const artistMatch = found.artist.toLowerCase().includes(artistName.toLowerCase()) ||
+                                                           artistName.toLowerCase().includes(found.artist.toLowerCase());
+                                        
+                                        if (titleMatch && artistMatch) {
+                                            return found;
+                                        }
+                                    }
+                                }
+                                // Si no hay coincidencia exacta o no hay artista, devolver la primera válida
+                                for (const found of results) {
+                                    if (found && found.title && found.artist) {
+                                        return found;
+                                    }
+                                }
+                            }
+                            return null;
+                        })
+                        .catch(err => {
+                            console.warn(`Could not find: ${query}`, err);
+                            return null;
+                        })
+                );
+            }
+            
+            // Esperar todas las búsquedas
+            console.log(`Searching for ${searchPromises.length} tracks...`);
+            const searchResults = await Promise.all(searchPromises);
+            
+            // Filtrar tracks válidos
+            for (const track of searchResults) {
+                if (track) {
+                    tracks.push(track);
                 }
             }
+            
+            console.log(`Successfully found ${tracks.length} tracks from Spotify playlist`);
+            
+            if (tracks.length === 0) {
+                throw new Error('No tracks found. Please check the format and try again.');
+            }
+            
+            const result = {
+                playlist: {
+                    name: playlistName,
+                    numberOfTracks: tracks.length,
+                    source: 'spotify'
+                },
+                tracks
+            };
 
-            if (!playlist) throw new Error('Playlist not found');
-
-            const tracks = (tracksSection?.items || []).map(i => this.prepareTrack(i.item || i));
-            const result = { playlist, tracks };
-
-            await this.cache.set('tidal_playlist', id, result);
+            await this.cache.set('spotify_playlist', playlistId, result);
             return result;
         } catch (error) {
-            console.error('Failed to fetch TIDAL playlist:', error);
-            throw error;
-        }
-    }
-
-    async getSpotifyPlaylistTracks(playlistId) {
-        // Nota: Esta es una funcionalidad limitada que busca por nombre/descripción
-        // Spotify requiere OAuth para acceso a playlists privadas
-        // Por ahora, intentamos buscar por nombre
-        try {
-            // Como no tenemos acceso directo a Spotify API sin OAuth,
-            // devolvemos un error indicativo
-            throw new Error('Spotify playlists require OAuth authentication. Please use TIDAL playlist links instead.');
-        } catch (error) {
-            console.error('Spotify integration not available:', error);
+            console.error('Failed to fetch Spotify playlist:', error);
             throw error;
         }
     }

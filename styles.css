@@ -522,6 +522,32 @@ a {
     border-color: var(--foreground);
 }
 
+/* Playlist Loader Section */
+.playlist-loader-section {
+    margin-bottom: var(--spacing-2xl);
+    padding: var(--spacing-xl);
+    background: linear-gradient(135deg, var(--card) 0%, #1a1a1a 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.playlist-loader-section .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 2rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.playlist-loader-section .btn-primary svg {
+    width: 20px;
+    height: 20px;
+}
+
 .settings-list {
     max-width: 800px;
 }
@@ -895,6 +921,41 @@ input:checked + .slider:before {
 
 #queue-modal-header h3 {
     margin: 0;
+}
+
+.queue-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.btn-icon {
+    background: transparent;
+    border: none;
+    color: var(--muted-foreground);
+    font-size: 1.5rem;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    transition: all .2s;
+}
+
+.btn-icon:hover {
+    background-color: var(--secondary);
+    color: var(--foreground);
+}
+
+.btn-icon:active {
+    transform: scale(0.95);
+}
+
+.btn-icon svg {
+    width: 20px;
+    height: 20px;
 }
 
 #queue-modal-header button {

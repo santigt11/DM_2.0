@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
                               track.id === (currentQueue[player.currentQueueIndex] || {}).id;
             
             return `
-                <div class="track-item ${isPlaying ? 'playing' : ''}" data-queue-index="${index}">
+                <div class="track-item ${isPlaying ? 'playing' : ''}" data-queue-index="${index}" data-track-id="${track.id}">
                     <div class="track-number">${index + 1}</div>
                     <div class="track-item-info">
                         <img src="${api.getCoverUrl(track.album?.cover, '80')}" 
@@ -100,6 +100,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="title">${track.title}</div>
                             <div class="artist">${track.artist?.name || 'Unknown'}</div>
                         </div>
+                    </div>
+                    <div class="track-item-actions">
+                        <button class="queue-item-btn download-track-btn" data-queue-index="${index}" title="Download">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                        <button class="queue-item-btn remove-track-btn" data-queue-index="${index}" title="Remove">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
                     </div>
                     <div class="track-item-duration">${formatTime(track.duration)}</div>
                 </div>
@@ -204,27 +219,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     playlistLinkBtn?.addEventListener('click', async () => {
-        const playlistUrl = prompt('Enter TIDAL Playlist URL:', '');
+        const playlistUrl = prompt('Enter Spotify Playlist URL:', 'https://open.spotify.com/playlist/...');
         if (!playlistUrl) return;
 
+        let notification;
         try {
-            const playlistId = api.extractTidalPlaylistId(playlistUrl);
+            // Intentar extraer ID de Spotify
+            const spotifyId = api.extractSpotifyPlaylistId(playlistUrl);
             
-            if (!playlistId) {
-                // Intentar con Spotify
-                const spotifyId = api.extractSpotifyPlaylistId(playlistUrl);
-                if (spotifyId) {
-                    throw new Error('Spotify playlists require OAuth. Please use TIDAL playlist links.');
-                }
-                throw new Error('Invalid playlist URL. Please use a valid TIDAL or Spotify URL.');
+            if (!spotifyId) {
+                throw new Error('Invalid Spotify playlist URL. Please use a valid Spotify playlist link.');
             }
 
-            const notification = document.createElement('div');
-            notification.textContent = 'Loading playlist...';
+            notification = document.createElement('div');
+            notification.textContent = '🔍 Loading Spotify playlist...';
             notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
             document.body.appendChild(notification);
 
-            const { playlist, tracks } = await api.getTidalPlaylist(playlistId);
+            const { playlist, tracks } = await api.getSpotifyPlaylist(spotifyId);
+            
+            if (tracks.length === 0) {
+                notification.textContent = '⚠️ No tracks found in playlist';
+                setTimeout(() => notification.remove(), 4000);
+                return;
+            }
             
             player.addMultipleToQueue(tracks);
             renderQueue();
@@ -232,6 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
             notification.textContent = `✓ Added ${tracks.length} tracks from "${playlist.name || 'Playlist'}" to queue`;
             setTimeout(() => notification.remove(), 4000);
         } catch (error) {
+            if (notification) notification.remove();
             alert(`Error loading playlist: ${error.message}`);
         }
     });
@@ -379,6 +398,106 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Clear Queue Button
+    const clearQueueBtn = document.getElementById('clear-queue-btn');
+    clearQueueBtn?.addEventListener('click', () => {
+        if (player.getCurrentQueue().length === 0) return;
+        
+        if (confirm('Are you sure you want to clear the entire queue?')) {
+            player.clearQueue();
+            renderQueue();
+            
+            const notification = document.createElement('div');
+            notification.textContent = '✓ Queue cleared';
+            notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 2000);
+        }
+    });
+
+    // Download All Queue Button
+    const downloadQueueBtn = document.getElementById('download-queue-btn');
+    downloadQueueBtn?.addEventListener('click', async () => {
+        const currentQueue = player.getCurrentQueue();
+        if (currentQueue.length === 0) {
+            alert('Queue is empty');
+            return;
+        }
+        
+        if (!confirm(`Download all ${currentQueue.length} tracks from queue?`)) return;
+        
+        const notification = document.createElement('div');
+        notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+        document.body.appendChild(notification);
+        
+        let downloaded = 0;
+        let failed = 0;
+        
+        for (let i = 0; i < currentQueue.length; i++) {
+            const track = currentQueue[i];
+            notification.textContent = `Downloading ${i + 1}/${currentQueue.length}: ${track.title}...`;
+            
+            try {
+                const filename = buildTrackFilename(track, QUALITY);
+                await api.downloadTrack(track.id, QUALITY, filename);
+                downloaded++;
+            } catch (error) {
+                console.error('Download failed:', track.title, error);
+                failed++;
+            }
+            
+            // Small delay to avoid overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        notification.textContent = `✓ Downloaded: ${downloaded}/${currentQueue.length}${failed > 0 ? ` (${failed} failed)` : ''}`;
+        setTimeout(() => notification.remove(), 4000);
+    });
+
+    // Queue Item Actions (Download & Remove)
+    queueList.addEventListener('click', async e => {
+        const downloadBtn = e.target.closest('.download-track-btn');
+        const removeBtn = e.target.closest('.remove-track-btn');
+        
+        if (downloadBtn) {
+            e.stopPropagation();
+            const index = parseInt(downloadBtn.dataset.queueIndex, 10);
+            const currentQueue = player.getCurrentQueue();
+            const track = currentQueue[index];
+            
+            if (!track) return;
+            
+            const notification = document.createElement('div');
+            notification.textContent = `Downloading: ${track.title}...`;
+            notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+            document.body.appendChild(notification);
+            
+            try {
+                const filename = buildTrackFilename(track, QUALITY);
+                await api.downloadTrack(track.id, QUALITY, filename);
+                notification.textContent = `✓ Downloaded: ${track.title}`;
+                setTimeout(() => notification.remove(), 3000);
+            } catch (error) {
+                notification.textContent = `✗ Download failed: ${error.message}`;
+                setTimeout(() => notification.remove(), 4000);
+            }
+        }
+        
+        if (removeBtn) {
+            e.stopPropagation();
+            const index = parseInt(removeBtn.dataset.queueIndex, 10);
+            player.removeFromQueue(index);
+            renderQueue();
+            
+            const notification = document.createElement('div');
+            notification.textContent = '✓ Track removed from queue';
+            notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 2000);
+        }
+    });
+
+
     hamburgerBtn.addEventListener('click', () => {
         sidebar.classList.add('is-open');
         sidebarOverlay.classList.add('is-visible');
@@ -520,11 +639,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('Service worker registered'))
-                .catch(err => console.log('Service worker not registered', err));
-        });
+        // No registrar Service Worker en desarrollo (localhost)
+        const isLocalhost = location.hostname === 'localhost' || 
+                           location.hostname === '127.0.0.1' ||
+                           location.hostname === '[::1]';
+        
+        if (isLocalhost) {
+            console.log('🔧 Development mode: Service Worker disabled');
+            // Desregistrar cualquier Service Worker existente
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(reg => reg.unregister());
+            });
+        } else {
+            // Solo registrar en producción
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service worker registered'))
+                    .catch(err => console.log('Service worker not registered', err));
+            });
+        }
     }
 
     let deferredPrompt;
