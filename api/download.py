@@ -108,10 +108,22 @@ class handler(BaseHTTPRequestHandler):
             print(f"[DOWNLOAD] Metadata: {'✓ Included' if metadata_success else '✗ Failed'}")
             
         except Exception as e:
-            print(f"[ERROR] Download failed: {e}")
+            error_msg = str(e)
+            print(f"[ERROR] Download failed: {error_msg}")
             import traceback
             traceback.print_exc()
-            self.send_error(500, f'Internal server error: {str(e)}')
+            
+            # Enviar respuesta de error con detalles
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            error_response = {
+                'error': error_msg,
+                'traceback': traceback.format_exc()
+            }
+            self.wfile.write(json.dumps(error_response).encode())
+
 
     def _add_flac_metadata(self, filepath, metadata):
         """Agregar metadatos a archivo FLAC"""

@@ -501,7 +501,19 @@ async searchAlbums(query) {
         });
 
         if (!response.ok) {
-            throw new Error(`Download server error: ${response.status}`);
+            // Intentar leer el mensaje de error detallado
+            let errorDetails = `Server error: ${response.status}`;
+            try {
+                const contentType = response.headers.get('Content-Type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    errorDetails = errorData.error || errorDetails;
+                    console.error('[DOWNLOAD] Server error details:', errorData);
+                }
+            } catch (e) {
+                // Si no se puede parsear, usar mensaje genérico
+            }
+            throw new Error(errorDetails);
         }
 
         // Verificar si se agregaron metadatos
