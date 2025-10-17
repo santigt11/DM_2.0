@@ -6,8 +6,6 @@ import json
 import requests
 import tempfile
 import os
-from mutagen.flac import FLAC, Picture
-from mutagen.mp4 import MP4, MP4Cover
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -21,6 +19,16 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle download request with metadata"""
         try:
+            # TEST: Verificar importaciones primero
+            print("[DOWNLOAD] Testing imports...")
+            try:
+                from mutagen.flac import FLAC, Picture
+                from mutagen.mp4 import MP4, MP4Cover
+                print("[DOWNLOAD] ✓ Mutagen imports OK")
+            except Exception as e:
+                print(f"[ERROR] Mutagen import failed: {e}")
+                raise Exception(f"Mutagen not available: {e}")
+            
             # Leer body JSON
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length)
@@ -127,6 +135,8 @@ class handler(BaseHTTPRequestHandler):
 
     def _add_flac_metadata(self, filepath, metadata):
         """Agregar metadatos a archivo FLAC"""
+        from mutagen.flac import FLAC, Picture
+        
         audio = FLAC(filepath)
         
         # Tags básicos
@@ -166,6 +176,8 @@ class handler(BaseHTTPRequestHandler):
 
     def _add_m4a_metadata(self, filepath, metadata):
         """Agregar metadatos a archivo M4A/MP4"""
+        from mutagen.mp4 import MP4, MP4Cover
+        
         audio = MP4(filepath)
         
         # Tags básicos
