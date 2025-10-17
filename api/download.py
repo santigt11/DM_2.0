@@ -34,54 +34,78 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error(400, 'Missing streamUrl')
                 return
             
-            print(f"[DOWNLOAD] Downloading: {metadata.get('title', 'Unknown')}")
+            print(f"[DOWNLOAD] Starting: {metadata.get('title', 'Unknown')}")
+            print(f"[DOWNLOAD] Quality: {quality}")
+            print(f"[DOWNLOAD] Stream URL: {stream_url[:50]}...")
             
             # Descargar archivo
+            print(f"[DOWNLOAD] Fetching stream...")
             response = requests.get(stream_url, stream=True, timeout=30)
             if response.status_code != 200:
+                print(f"[ERROR] Stream fetch failed: {response.status_code}")
                 self.send_error(response.status_code, f'Failed to download: {response.status_code}')
                 return
             
             # Detectar formato
             content_type = response.headers.get('Content-Type', '')
             is_flac = 'flac' in content_type.lower() or quality in ['LOSSLESS', 'HI_RES_LOSSLESS']
+            print(f"[DOWNLOAD] Format detected: {'FLAC' if is_flac else 'M4A'}")
             
             # Guardar en archivo temporal
+            print(f"[DOWNLOAD] Writing to temp file...")
             with tempfile.NamedTemporaryFile(delete=False, suffix='.flac' if is_flac else '.m4a') as tmp:
+                chunk_count = 0
                 for chunk in response.iter_content(chunk_size=8192):
                     tmp.write(chunk)
+                    chunk_count += 1
                 tmp_path = tmp.name
             
-            print(f"[DOWNLOAD] File downloaded to temp: {tmp_path}")
+            print(f"[DOWNLOAD] File downloaded: {tmp_path} ({chunk_count} chunks)")
+            
+            # Verificar tamaño del archivo
+            file_size = os.path.getsize(tmp_path)
+            print(f"[DOWNLOAD] File size: {file_size} bytes ({file_size / 1024 / 1024:.2f} MB)")
             
             # Agregar metadatos
+            metadata_success = False
             try:
+                print(f"[DOWNLOAD] Adding metadata...")
                 if is_flac:
                     self._add_flac_metadata(tmp_path, metadata)
                 else:
                     self._add_m4a_metadata(tmp_path, metadata)
-                print(f"[DOWNLOAD] Metadata added successfully")
+                print(f"[DOWNLOAD] ✓ Metadata added successfully")
+                metadata_success = True
             except Exception as e:
-                print(f"[WARNING] Failed to add metadata: {e}")
+                print(f"[WARNING] ✗ Failed to add metadata: {e}")
+                import traceback
+                traceback.print_exc()
                 # Continuar sin metadatos
             
             # Leer archivo procesado
+            print(f"[DOWNLOAD] Reading processed file...")
             with open(tmp_path, 'rb') as f:
                 file_data = f.read()
             
+            final_size = len(file_data)
+            print(f"[DOWNLOAD] Final size: {final_size} bytes ({final_size / 1024 / 1024:.2f} MB)")
+            
             # Eliminar temporal
             os.unlink(tmp_path)
+            print(f"[DOWNLOAD] Temp file cleaned")
             
             # Enviar archivo al navegador
             self.send_response(200)
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Content-Type', 'audio/flac' if is_flac else 'audio/mp4')
-            self.send_header('Content-Length', str(len(file_data)))
+            self.send_header('Content-Length', str(final_size))
             self.send_header('Content-Disposition', f'attachment; filename="{metadata.get("filename", "track.flac")}"')
+            self.send_header('X-Metadata-Added', 'true' if metadata_success else 'false')
             self.end_headers()
             self.wfile.write(file_data)
             
-            print(f"[DOWNLOAD] Successfully sent: {metadata.get('title', 'Unknown')}")
+            print(f"[DOWNLOAD] ✓ Successfully sent: {metadata.get('title', 'Unknown')}")
+            print(f"[DOWNLOAD] Metadata: {'✓ Included' if metadata_success else '✗ Failed'}")
             
         except Exception as e:
             print(f"[ERROR] Download failed: {e}")

@@ -508,6 +508,15 @@ async searchAlbums(query) {
             throw new Error(`Download server error: ${response.status}`);
         }
 
+        // Verificar si se agregaron metadatos
+        const metadataAdded = response.headers.get('X-Metadata-Added') === 'true';
+        if (!metadataAdded) {
+            console.warn('⚠️ File downloaded but metadata could NOT be added');
+            showNotification('Downloaded without metadata (check Vercel logs)', 'warning');
+        } else {
+            console.log('✓ File downloaded with metadata successfully');
+        }
+
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         
