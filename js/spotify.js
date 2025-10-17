@@ -6,7 +6,7 @@
 class SpotifyAPI {
     constructor() {
         this.clientId = ''; // Se configurará desde la UI o config
-        this.redirectUri = window.location.origin + '/callback';
+        this.redirectUri = window.location.origin + '/';
         this.authEndpoint = 'https://accounts.spotify.com/authorize';
         this.tokenEndpoint = 'https://accounts.spotify.com/api/token';
         this.apiBase = 'https://api.spotify.com/v1';
