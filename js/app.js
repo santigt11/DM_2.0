@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tempEl.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
                 document.body.appendChild(tempEl);
                 
-                await api.downloadTrack(contextTrack.id, QUALITY, filename);
+                await api.downloadTrack(contextTrack.id, QUALITY, filename, contextTrack);
                 
                 tempEl.textContent = `✓ Downloaded: ${contextTrack.title}`;
                 setTimeout(() => tempEl.remove(), 3000);
@@ -439,10 +439,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             try {
                 const filename = buildTrackFilename(track, QUALITY);
-                await api.downloadTrack(track.id, QUALITY, filename);
+                await api.downloadTrack(track.id, QUALITY, filename, track);
                 downloaded++;
             } catch (error) {
                 console.error('Download failed:', track.title, error);
+                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE 
+                    ? error.message 
+                    : 'Download failed. Please try again.';
+                console.error(errorMsg);
                 failed++;
             }
             
@@ -474,11 +478,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             try {
                 const filename = buildTrackFilename(track, QUALITY);
-                await api.downloadTrack(track.id, QUALITY, filename);
+                await api.downloadTrack(track.id, QUALITY, filename, track);
                 notification.textContent = `✓ Downloaded: ${track.title}`;
                 setTimeout(() => notification.remove(), 3000);
             } catch (error) {
-                notification.textContent = `✗ Download failed: ${error.message}`;
+                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE 
+                    ? error.message 
+                    : 'Download failed. Please try again.';
+                notification.textContent = `✗ ${errorMsg}`;
                 setTimeout(() => notification.remove(), 4000);
             }
         }

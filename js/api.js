@@ -381,43 +381,143 @@ async searchAlbums(query) {
         throw new Error('Could not resolve stream URL');
     }
 
-    async downloadTrack(id, quality = 'LOSSLESS', filename) {
-        try {
-            const lookup = await this.getTrack(id, quality);
-            let streamUrl;
+    async downloadTrack(id, quality = 'LOSSLESS', filename, trackMetadata = null) {
+        const qualityPriority = ['LOSSLESS', 'HIGH', 'LOW'];
+        let lastError = null;
+        
+        // Si la calidad solicitada no está en la lista de fallback, empezar con ella
+        const qualitiesToTry = quality !== 'LOSSLESS' && quality !== 'HIGH' && quality !== 'LOW'
+            ? [quality, ...qualityPriority]
+            : qualityPriority;
+        
+        for (const currentQuality of qualitiesToTry) {
+            try {
+                console.log(`[DOWNLOAD] Attempting download for track ${id} at quality ${currentQuality}`);
+                const lookup = await this.getTrack(id, currentQuality);
+                console.log(`[DOWNLOAD] Track lookup result:`, lookup);
+                
+                let streamUrl;
 
-            if (lookup.originalTrackUrl) {
-                streamUrl = lookup.originalTrackUrl;
-            } else {
-                streamUrl = this.extractStreamUrlFromManifest(lookup.info.manifest);
-                if (!streamUrl) {
-                    throw new Error('Could not resolve stream URL');
+                if (lookup.originalTrackUrl) {
+                    streamUrl = lookup.originalTrackUrl;
+                    console.log(`[DOWNLOAD] Using original track URL: ${streamUrl}`);
+                } else {
+                    streamUrl = this.extractStreamUrlFromManifest(lookup.info.manifest);
+                    console.log(`[DOWNLOAD] Extracted stream URL from manifest: ${streamUrl}`);
+                    if (!streamUrl) {
+                        throw new Error('Could not resolve stream URL');
+                    }
                 }
-            }
 
-            const response = await fetch(streamUrl, { cache: 'no-store' });
-            
-            if (!response.ok) {
-                throw new Error(`Fetch failed: ${response.status}`);
-            }
+                // Intentar usar servidor local con metadatos
+                const useLocalServer = location.hostname === 'localhost' || 
+                                      location.hostname === '127.0.0.1' ||
+                                      location.hostname === '[::1]';
+                
+                if (useLocalServer && trackMetadata) {
+                    console.log(`[DOWNLOAD] Using local download server with metadata`);
+                    try {
+                        await this._downloadWithMetadata(streamUrl, filename, trackMetadata, currentQuality);
+                        console.log(`[DOWNLOAD] Successfully downloaded with metadata: ${filename}`);
+                        return;
+                    } catch (error) {
+                        console.warn(`[DOWNLOAD] Local server failed, falling back to direct download:`, error.message);
+                        // Continuar con descarga directa
+                    }
+                }
 
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error("Download failed:", error);
-            if (error.message === RATE_LIMIT_ERROR_MESSAGE) {
-                throw error;
+                // Descarga directa sin metadatos (fallback)
+                console.log(`[DOWNLOAD] Using direct download (no metadata)`);
+                const response = await fetch(streamUrl, { cache: 'no-store' });
+                
+                if (!response.ok) {
+                    console.error(`[DOWNLOAD] Fetch failed with status: ${response.status} ${response.statusText}`);
+                    throw new Error(`Fetch failed: ${response.status}`);
+                }
+
+                console.log(`[DOWNLOAD] Converting to blob...`);
+                const blob = await response.blob();
+                console.log(`[DOWNLOAD] Blob size: ${blob.size} bytes, type: ${blob.type}`);
+                
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                console.log(`[DOWNLOAD] Successfully downloaded: ${filename} at quality ${currentQuality}`);
+                return; // Éxito, salir de la función
+            } catch (error) {
+                console.warn(`[DOWNLOAD] Failed with quality ${currentQuality}:`, error.message);
+                lastError = error;
+                // Continuar con la siguiente calidad
             }
-            throw new Error('Download failed. The stream may require a proxy.');
         }
+        
+        // Si llegamos aquí, todas las calidades fallaron
+        console.error("[DOWNLOAD] All quality attempts failed. Last error:", lastError);
+        console.error("[DOWNLOAD] Error stack:", lastError?.stack);
+        
+        if (lastError?.message === RATE_LIMIT_ERROR_MESSAGE) {
+            throw lastError;
+        }
+        throw new Error('Download failed. Try with a different track or check your connection.');
+    }
+
+    async _downloadWithMetadata(streamUrl, filename, trackMetadata, quality) {
+        const metadata = {
+            title: trackMetadata.title,
+            artist: trackMetadata.artist?.name,
+            album: trackMetadata.album?.title,
+            albumArtist: trackMetadata.album?.artist?.name || trackMetadata.artist?.name,
+            date: trackMetadata.album?.releaseDate?.substring(0, 4), // Solo año
+            trackNumber: trackMetadata.trackNumber,
+            totalTracks: trackMetadata.album?.numberOfTracks,
+            discNumber: trackMetadata.volumeNumber || 1,
+            genre: trackMetadata.genre,
+            coverUrl: this.getCoverUrl(trackMetadata.album?.cover, '1280'),
+            filename: filename
+        };
+
+        // Detectar si estamos en localhost o en producción
+        const isLocalhost = location.hostname === 'localhost' || 
+                           location.hostname === '127.0.0.1' ||
+                           location.hostname === '[::1]';
+        
+        const downloadUrl = isLocalhost 
+            ? 'http://localhost:8001/api/download'  // Desarrollo local
+            : '/api/download';  // Producción (Vercel serverless function)
+
+        const response = await fetch(downloadUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                streamUrl: streamUrl,
+                metadata: metadata,
+                quality: quality
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Download server error: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     getCoverUrl(id, size = '1280') {
