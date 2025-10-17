@@ -1497,3 +1497,222 @@ input:checked + .slider:before {
         font-size: 0.9rem;
     }
 }
+
+/* ============= Spotify Modal ============= */
+#spotify-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-md);
+}
+
+#spotify-modal {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 100%;
+    max-width: 700px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+#spotify-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--border);
+}
+
+#spotify-modal-header h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+#spotify-modal-content {
+    padding: var(--spacing-lg);
+    overflow-y: auto;
+    flex: 1;
+}
+
+#spotify-auth-section {
+    text-align: center;
+    padding: var(--spacing-xl) 0;
+}
+
+#spotify-auth-section p {
+    margin-bottom: var(--spacing-md);
+    color: var(--muted-foreground);
+}
+
+#spotify-client-id {
+    width: 100%;
+    max-width: 400px;
+    padding: var(--spacing-md);
+    background-color: var(--input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--foreground);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    margin-bottom: var(--spacing-md);
+}
+
+#spotify-client-id:focus {
+    outline: none;
+    border-color: var(--ring);
+}
+
+.help-text {
+    font-size: 0.85rem;
+    color: var(--muted-foreground);
+    margin-top: var(--spacing-md);
+}
+
+.help-text a {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.spotify-search-bar {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+}
+
+#spotify-playlist-url {
+    flex: 1;
+    padding: var(--spacing-md);
+    background-color: var(--input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--foreground);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+}
+
+#spotify-playlist-url:focus {
+    outline: none;
+    border-color: var(--ring);
+}
+
+#spotify-playlist-info {
+    background-color: var(--secondary);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius);
+    margin-bottom: var(--spacing-lg);
+}
+
+#spotify-playlist-info h4 {
+    font-size: 1.25rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+#spotify-playlist-info p {
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+}
+
+#spotify-tracks-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: var(--spacing-lg);
+}
+
+.spotify-track-item {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border);
+    transition: background-color 0.2s;
+    cursor: pointer;
+}
+
+.spotify-track-item:hover {
+    background-color: var(--secondary);
+}
+
+.spotify-track-number {
+    min-width: 40px;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+}
+
+.spotify-track-info {
+    flex: 1;
+}
+
+.spotify-track-title {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.spotify-track-artist {
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+}
+
+.spotify-track-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.primary-btn {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.primary-btn:hover {
+    opacity: 0.9;
+}
+
+.primary-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.secondary-btn {
+    background-color: transparent;
+    color: var(--foreground);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.secondary-btn:hover {
+    background-color: var(--secondary);
+}
+
+#spotify-nav-btn svg {
+    fill: currentColor;
+}
+
+#spotify-status-text {
+    transition: color 0.3s;
+}
+
+#spotify-nav-btn.connected #spotify-status-text {
+    color: #1DB954; /* Spotify green */
+}

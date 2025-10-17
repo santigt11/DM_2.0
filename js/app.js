@@ -2,6 +2,7 @@ import { LosslessAPI } from './api.js';
 import { apiSettings } from './storage.js';
 import { UIRenderer } from './ui.js';
 import { Player } from './player.js';
+import SpotifyAPI from './spotify.js';
 import { 
     QUALITY, REPEAT_MODE, SVG_PLAY, SVG_PAUSE, 
     SVG_VOLUME, SVG_MUTE, formatTime, trackDataStore,
@@ -672,4 +673,196 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         deferredPrompt = e;
     });
+
+    // ============= Spotify Integration =============
+    const spotifyAPI = new SpotifyAPI();
+    const spotifyModal = document.getElementById('spotify-modal-overlay');
+    const spotifyNavBtn = document.getElementById('spotify-nav-btn');
+    const closeSpotifyBtn = document.getElementById('close-spotify-btn');
+    const spotifyConnectBtn = document.getElementById('spotify-connect-btn');
+    const spotifyClientIdInput = document.getElementById('spotify-client-id');
+    const spotifyAuthSection = document.getElementById('spotify-auth-section');
+    const spotifyPlaylistsSection = document.getElementById('spotify-playlists-section');
+    const spotifyLogoutBtn = document.getElementById('spotify-logout-btn');
+    const spotifyLoadBtn = document.getElementById('spotify-load-btn');
+    const spotifyPlaylistUrl = document.getElementById('spotify-playlist-url');
+    const spotifyTracksList = document.getElementById('spotify-tracks-list');
+    const spotifyPlaylistInfo = document.getElementById('spotify-playlist-info');
+
+    // Cargar Client ID guardado
+    const savedClientId = localStorage.getItem('spotify_client_id');
+    if (savedClientId) {
+        spotifyClientIdInput.value = savedClientId;
+        spotifyAPI.clientId = savedClientId;
+    }
+
+    // Verificar si ya está autenticado
+    function updateSpotifyUI() {
+        if (spotifyAPI.isAuthenticated()) {
+            spotifyNavBtn.classList.add('connected');
+            document.getElementById('spotify-status-text').textContent = 'Spotify Connected';
+            spotifyAuthSection.style.display = 'none';
+            spotifyPlaylistsSection.style.display = 'block';
+        } else {
+            spotifyNavBtn.classList.remove('connected');
+            document.getElementById('spotify-status-text').textContent = 'Connect Spotify';
+            spotifyAuthSection.style.display = 'block';
+            spotifyPlaylistsSection.style.display = 'none';
+        }
+    }
+
+    // Manejar callback de Spotify si estamos en la página de callback
+    if (window.location.search.includes('code=')) {
+        spotifyAPI.handleCallback()
+            .then(() => {
+                showNotification('Spotify connected successfully!', 'success');
+                updateSpotifyUI();
+                // Limpiar URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            })
+            .catch(err => {
+                showNotification(`Spotify auth error: ${err.message}`, 'error');
+                console.error(err);
+            });
+    }
+
+    updateSpotifyUI();
+
+    // Abrir modal de Spotify
+    spotifyNavBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        spotifyModal.style.display = 'flex';
+    });
+
+    // Cerrar modal
+    closeSpotifyBtn.addEventListener('click', () => {
+        spotifyModal.style.display = 'none';
+    });
+
+    spotifyModal.addEventListener('click', (e) => {
+        if (e.target === spotifyModal) {
+            spotifyModal.style.display = 'none';
+        }
+    });
+
+    // Conectar con Spotify
+    spotifyConnectBtn.addEventListener('click', () => {
+        const clientId = spotifyClientIdInput.value.trim();
+        if (!clientId) {
+            showNotification('Please enter a Spotify Client ID', 'error');
+            return;
+        }
+        
+        // Guardar Client ID
+        localStorage.setItem('spotify_client_id', clientId);
+        spotifyAPI.clientId = clientId;
+        
+        // Iniciar flujo de autorización
+        spotifyAPI.authorize();
+    });
+
+    // Desconectar Spotify
+    spotifyLogoutBtn.addEventListener('click', () => {
+        spotifyAPI.logout();
+        updateSpotifyUI();
+        spotifyTracksList.innerHTML = '';
+        spotifyPlaylistInfo.style.display = 'none';
+        showNotification('Disconnected from Spotify', 'success');
+    });
+
+    // Cargar playlist de Spotify
+    spotifyLoadBtn.addEventListener('click', async () => {
+        const input = spotifyPlaylistUrl.value.trim();
+        if (!input) {
+            showNotification('Please enter a Spotify playlist URL', 'error');
+            return;
+        }
+
+        const playlistId = spotifyAPI.extractPlaylistId(input);
+        if (!playlistId) {
+            showNotification('Invalid Spotify playlist URL', 'error');
+            return;
+        }
+
+        try {
+            spotifyLoadBtn.disabled = true;
+            spotifyLoadBtn.textContent = 'Loading...';
+
+            // Obtener información de la playlist
+            const playlist = await spotifyAPI.getPlaylist(playlistId);
+            
+            // Mostrar información
+            spotifyPlaylistInfo.style.display = 'block';
+            spotifyPlaylistInfo.innerHTML = `
+                <h4>${playlist.name}</h4>
+                <p>${playlist.owner.display_name} • ${playlist.tracks.total} tracks</p>
+            `;
+
+            // Obtener todas las canciones (Spotify limita a 100 por request)
+            let allTracks = [];
+            let offset = 0;
+            const limit = 100;
+            
+            while (offset < playlist.tracks.total) {
+                const data = await spotifyAPI.getPlaylistTracks(playlistId, limit, offset);
+                allTracks = allTracks.concat(data.items);
+                offset += limit;
+            }
+
+            // Convertir tracks al formato de la app
+            const convertedTracks = spotifyAPI.convertSpotifyTracksToTidal(allTracks);
+
+            // Mostrar tracks
+            renderSpotifyTracks(convertedTracks);
+
+            showNotification(`Loaded ${convertedTracks.length} tracks from Spotify`, 'success');
+
+        } catch (error) {
+            console.error('Error loading Spotify playlist:', error);
+            showNotification(`Error: ${error.message}`, 'error');
+        } finally {
+            spotifyLoadBtn.disabled = false;
+            spotifyLoadBtn.textContent = 'Load Playlist';
+        }
+    });
+
+    function renderSpotifyTracks(tracks) {
+        spotifyTracksList.innerHTML = tracks.map((track, index) => `
+            <div class="spotify-track-item" data-index="${index}">
+                <div class="spotify-track-number">${index + 1}</div>
+                <div class="spotify-track-info">
+                    <div class="spotify-track-title">${escapeHtml(track.title)}</div>
+                    <div class="spotify-track-artist">${escapeHtml(track.artists)}</div>
+                </div>
+                <div class="spotify-track-actions">
+                    <button class="btn-icon spotify-search-btn" title="Search in TIDAL" data-index="${index}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.3-4.3"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        // Event listeners para buscar en TIDAL
+        spotifyTracksList.querySelectorAll('.spotify-search-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                const track = tracks[index];
+                
+                // Buscar en TIDAL usando ISRC o título + artista
+                const query = track.isrc || `${track.title} ${track.artist}`;
+                window.location.hash = `search/${encodeURIComponent(query)}`;
+                spotifyModal.style.display = 'none';
+            });
+        });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 });
