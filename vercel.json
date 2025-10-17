@@ -1,17 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/download.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/download",
-      "dest": "/api/download.py"
-    }
-  ],
   "functions": {
     "api/download.py": {
       "memory": 1024,
