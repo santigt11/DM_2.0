@@ -409,19 +409,15 @@ async searchAlbums(query) {
                     }
                 }
 
-                // Intentar usar servidor local con metadatos
-                const useLocalServer = location.hostname === 'localhost' || 
-                                      location.hostname === '127.0.0.1' ||
-                                      location.hostname === '[::1]';
-                
-                if (useLocalServer && trackMetadata) {
-                    console.log(`[DOWNLOAD] Using local download server with metadata`);
+                // Intentar usar servidor de metadatos (localhost o producción)
+                if (trackMetadata) {
+                    console.log(`[DOWNLOAD] Using download server with metadata`);
                     try {
                         await this._downloadWithMetadata(streamUrl, filename, trackMetadata, currentQuality);
                         console.log(`[DOWNLOAD] Successfully downloaded with metadata: ${filename}`);
                         return;
                     } catch (error) {
-                        console.warn(`[DOWNLOAD] Local server failed, falling back to direct download:`, error.message);
+                        console.warn(`[DOWNLOAD] Metadata server failed, falling back to direct download:`, error.message);
                         // Continuar con descarga directa
                     }
                 }
