@@ -793,9 +793,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Mostrar información
             spotifyPlaylistInfo.style.display = 'block';
-            spotifyPlaylistInfo.innerHTML = `
-                <h4>${playlist.name}</h4>
-                <p>${playlist.owner.display_name} • ${playlist.tracks.total} tracks</p>
+            document.getElementById('spotify-playlist-details').innerHTML = `
+                <h4>${escapeHtml(playlist.name)}</h4>
+                <p>${escapeHtml(playlist.owner.display_name)} • ${playlist.tracks.total} tracks</p>
             `;
 
             // Obtener todas las canciones (Spotify limita a 100 por request)
@@ -826,7 +826,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let currentSpotifyTracks = [];
+
     function renderSpotifyTracks(tracks) {
+        currentSpotifyTracks = tracks;
+        
         spotifyTracksList.innerHTML = tracks.map((track, index) => `
             <div class="spotify-track-item" data-index="${index}">
                 <div class="spotify-track-number">${index + 1}</div>
@@ -835,6 +839,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="spotify-track-artist">${escapeHtml(track.artists)}</div>
                 </div>
                 <div class="spotify-track-actions">
+                    <button class="btn-icon spotify-add-queue-btn" title="Add to Queue" data-index="${index}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
                     <button class="btn-icon spotify-search-btn" title="Search in TIDAL" data-index="${index}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"></circle>
@@ -844,6 +854,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `).join('');
+
+        // Event listeners para agregar a la cola
+        spotifyTracksList.querySelectorAll('.spotify-add-queue-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                await addSpotifyTrackToQueue(tracks[index]);
+            });
+        });
 
         // Event listeners para buscar en TIDAL
         spotifyTracksList.querySelectorAll('.spotify-search-btn').forEach(btn => {
@@ -858,6 +877,71 @@ document.addEventListener('DOMContentLoaded', () => {
                 spotifyModal.style.display = 'none';
             });
         });
+    }
+
+    // Agregar todas las canciones de Spotify a la cola
+    document.getElementById('spotify-add-all-btn').addEventListener('click', async () => {
+        const addAllBtn = document.getElementById('spotify-add-all-btn');
+        if (currentSpotifyTracks.length === 0) {
+            showNotification('No tracks to add', 'error');
+            return;
+        }
+
+        addAllBtn.disabled = true;
+        addAllBtn.textContent = 'Adding to queue...';
+
+        let addedCount = 0;
+        for (const track of currentSpotifyTracks) {
+            const added = await addSpotifyTrackToQueue(track, false); // false = no mostrar notificación individual
+            if (added) addedCount++;
+        }
+
+        addAllBtn.disabled = false;
+        addAllBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Add All to Queue
+        `;
+
+        showNotification(`Added ${addedCount} of ${currentSpotifyTracks.length} tracks to queue`, 'success');
+    });
+
+    // Función para buscar una canción de Spotify en TIDAL y agregarla a la cola
+    async function addSpotifyTrackToQueue(spotifyTrack, showNotif = true) {
+        try {
+            // Buscar en TIDAL usando ISRC (más preciso) o título + artista
+            const query = spotifyTrack.isrc || `${spotifyTrack.title} ${spotifyTrack.artist}`;
+            
+            const results = await api.searchTracks(query);
+            
+            if (!results.items || results.items.length === 0) {
+                if (showNotif) {
+                    showNotification(`No match found for "${spotifyTrack.title}"`, 'error');
+                }
+                return false;
+            }
+
+            // Tomar el primer resultado (el más relevante)
+            const tidalTrack = results.items[0];
+            
+            // Agregar a la cola
+            player.addToQueue(tidalTrack);
+            
+            if (showNotif) {
+                showNotification(`Added "${tidalTrack.title}" to queue`, 'success');
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Error adding Spotify track to queue:', error);
+            if (showNotif) {
+                showNotification(`Error adding "${spotifyTrack.title}"`, 'error');
+            }
+            return false;
+        }
     }
 
     function escapeHtml(text) {
