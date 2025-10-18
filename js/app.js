@@ -43,6 +43,36 @@ document.addEventListener('DOMContentLoaded', () => {
     let contextTrack = null;
     let currentAlbumTracks = [];
 
+    // Función para mostrar notificaciones
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.textContent = message;
+        
+        const backgroundColor = type === 'success' ? '#16a34a' : 
+                               type === 'error' ? '#dc2626' : 
+                               type === 'warning' ? '#ca8a04' : 
+                               'var(--card)';
+        
+        notification.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: ${backgroundColor};
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius);
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            animation: slideIn 0.3s ease;
+        `;
+        
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
     document.querySelectorAll('.search-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));

@@ -1733,3 +1733,26 @@ input:checked + .slider:before {
 #spotify-nav-btn.connected #spotify-status-text {
     color: #1DB954; /* Spotify green */
 }
+
+/* ============= Notification Animations ============= */
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
