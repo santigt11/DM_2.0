@@ -918,12 +918,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         addAllBtn.disabled = true;
-        addAllBtn.textContent = 'Adding to queue...';
-
+        
+        const total = currentSpotifyTracks.length;
+        let processed = 0;
         let addedCount = 0;
-        for (const track of currentSpotifyTracks) {
-            const added = await addSpotifyTrackToQueue(track, false); // false = no mostrar notificación individual
-            if (added) addedCount++;
+
+        // Procesar en lotes de 10 canciones en paralelo
+        const batchSize = 10;
+        for (let i = 0; i < total; i += batchSize) {
+            const batch = currentSpotifyTracks.slice(i, i + batchSize);
+            
+            // Actualizar progreso
+            addAllBtn.textContent = `Adding ${Math.min(i + batchSize, total)}/${total}...`;
+            
+            // Procesar lote en paralelo
+            const results = await Promise.all(
+                batch.map(track => addSpotifyTrackToQueue(track, false))
+            );
+            
+            // Contar exitosos
+            addedCount += results.filter(Boolean).length;
+            processed += batch.length;
         }
 
         addAllBtn.disabled = false;
@@ -936,39 +951,69 @@ document.addEventListener('DOMContentLoaded', () => {
             Add All to Queue
         `;
 
-        showNotification(`Added ${addedCount} of ${currentSpotifyTracks.length} tracks to queue`, 'success');
+        const successRate = Math.round((addedCount / total) * 100);
+        showNotification(`✓ Added ${addedCount}/${total} tracks (${successRate}%)`, addedCount === total ? 'success' : 'warning');
     });
 
     // Función para buscar una canción de Spotify en TIDAL y agregarla a la cola
     async function addSpotifyTrackToQueue(spotifyTrack, showNotif = true) {
         try {
-            // Buscar en TIDAL usando ISRC (más preciso) o título + artista
-            const query = spotifyTrack.isrc || `${spotifyTrack.title} ${spotifyTrack.artist}`;
+            let results = null;
             
-            const results = await api.searchTracks(query);
+            // Estrategia 1: Buscar por ISRC (más preciso)
+            if (spotifyTrack.isrc) {
+                results = await api.searchTracks(spotifyTrack.isrc);
+            }
             
-            if (!results.items || results.items.length === 0) {
+            // Estrategia 2: Si no hay resultados, buscar por título + artista
+            if (!results?.items || results.items.length === 0) {
+                const query = `${spotifyTrack.title} ${spotifyTrack.artist}`;
+                results = await api.searchTracks(query);
+            }
+            
+            // Estrategia 3: Si aún no hay resultados, buscar solo por título
+            if (!results?.items || results.items.length === 0) {
+                results = await api.searchTracks(spotifyTrack.title);
+            }
+            
+            if (!results?.items || results.items.length === 0) {
+                console.warn(`No match found for: ${spotifyTrack.title} - ${spotifyTrack.artist}`);
                 if (showNotif) {
-                    showNotification(`No match found for "${spotifyTrack.title}"`, 'error');
+                    showNotification(`No match: "${spotifyTrack.title}"`, 'error');
                 }
                 return false;
             }
 
-            // Tomar el primer resultado (el más relevante)
-            const tidalTrack = results.items[0];
+            // Buscar el mejor match (título similar y artista similar)
+            let bestMatch = results.items[0];
+            const spotifyTitleLower = spotifyTrack.title.toLowerCase();
+            const spotifyArtistLower = spotifyTrack.artist.toLowerCase();
+            
+            for (const item of results.items) {
+                const tidalTitleLower = item.title.toLowerCase();
+                const tidalArtistLower = (item.artist?.name || '').toLowerCase();
+                
+                // Si encuentra match exacto de título y artista, usar ese
+                if (tidalTitleLower.includes(spotifyTitleLower) || spotifyTitleLower.includes(tidalTitleLower)) {
+                    if (tidalArtistLower.includes(spotifyArtistLower) || spotifyArtistLower.includes(tidalArtistLower)) {
+                        bestMatch = item;
+                        break;
+                    }
+                }
+            }
             
             // Agregar a la cola
-            player.addToQueue(tidalTrack);
+            player.addToQueue(bestMatch);
             
             if (showNotif) {
-                showNotification(`Added "${tidalTrack.title}" to queue`, 'success');
+                showNotification(`Added "${bestMatch.title}"`, 'success');
             }
             
             return true;
         } catch (error) {
             console.error('Error adding Spotify track to queue:', error);
             if (showNotif) {
-                showNotification(`Error adding "${spotifyTrack.title}"`, 'error');
+                showNotification(`Error: "${spotifyTrack.title}"`, 'error');
             }
             return false;
         }
