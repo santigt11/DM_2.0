@@ -922,6 +922,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const total = currentSpotifyTracks.length;
         let processed = 0;
         let addedCount = 0;
+        const failedTracks = []; // Almacenar canciones fallidas
 
         // Procesar en lotes de 10 canciones en paralelo
         const batchSize = 10;
@@ -931,14 +932,63 @@ document.addEventListener('DOMContentLoaded', () => {
             // Actualizar progreso
             addAllBtn.textContent = `Adding ${Math.min(i + batchSize, total)}/${total}...`;
             
-            // Procesar lote en paralelo
-            const results = await Promise.all(
-                batch.map(track => addSpotifyTrackToQueue(track, false))
-            );
-            
-            // Contar exitosos
-            addedCount += results.filter(Boolean).length;
-            processed += batch.length;
+            try {
+                // Procesar lote en paralelo con información detallada y timeout
+                const batchPromises = batch.map(async (track, index) => {
+                    try {
+                        // Timeout de 30 segundos por track
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Timeout')), 30000)
+                        );
+                        
+                        const searchPromise = addSpotifyTrackToQueue(track, false);
+                        const result = await Promise.race([searchPromise, timeoutPromise]);
+                        
+                        if (!result) {
+                            failedTracks.push({
+                                title: track.title,
+                                artist: track.artist,
+                                index: i + index + 1,
+                                reason: 'Not found'
+                            });
+                        }
+                        return result;
+                    } catch (error) {
+                        console.warn(`Failed to process track ${track.title}:`, error.message);
+                        failedTracks.push({
+                            title: track.title,
+                            artist: track.artist,
+                            index: i + index + 1,
+                            reason: error.message === 'Timeout' ? 'Timeout' : 'Error'
+                        });
+                        return false;
+                    }
+                });
+                
+                const results = await Promise.all(batchPromises);
+                
+                // Contar exitosos
+                addedCount += results.filter(Boolean).length;
+                processed += batch.length;
+                
+                // Pequeña pausa entre lotes para evitar sobrecarga
+                if (i + batchSize < total) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+            } catch (error) {
+                console.error(`Error processing batch ${i}-${i + batchSize}:`, error);
+                // Si falla todo el lote, marcar todas como fallidas
+                batch.forEach((track, index) => {
+                    failedTracks.push({
+                        title: track.title,
+                        artist: track.artist,
+                        index: i + index + 1,
+                        reason: 'Batch error'
+                    });
+                });
+                processed += batch.length;
+            }
         }
 
         addAllBtn.disabled = false;
@@ -952,7 +1002,16 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         const successRate = Math.round((addedCount / total) * 100);
-        showNotification(`✓ Added ${addedCount}/${total} tracks (${successRate}%)`, addedCount === total ? 'success' : 'warning');
+        
+        // Mostrar resumen
+        if (failedTracks.length === 0) {
+            showNotification(`✓ All ${total} tracks added successfully!`, 'success');
+        } else {
+            showNotification(`✓ Added ${addedCount}/${total} tracks (${successRate}%)`, 'warning');
+            
+            // Mostrar modal con canciones fallidas
+            showFailedTracksModal(failedTracks);
+        }
     });
 
     // Función para buscar una canción de Spotify en TIDAL y agregarla a la cola
@@ -1017,6 +1076,126 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return false;
         }
+    }
+
+    // Variables globales para el modal de canciones fallidas
+    let currentFailedTracks = [];
+
+    // Función para mostrar modal de canciones fallidas
+    function showFailedTracksModal(failedTracks) {
+        currentFailedTracks = failedTracks;
+        const modal = document.getElementById('failed-tracks-modal');
+        const summary = document.getElementById('failed-tracks-summary');
+        const list = document.getElementById('failed-tracks-list');
+
+        // Actualizar resumen
+        summary.textContent = `${failedTracks.length} tracks could not be found in TIDAL:`;
+
+        // Limpiar y llenar lista
+        list.innerHTML = '';
+        failedTracks.forEach(track => {
+            const item = document.createElement('div');
+            item.className = 'failed-track-item';
+            
+            const reasonText = track.reason ? ` (${track.reason})` : '';
+            item.innerHTML = `
+                <div class="failed-track-info">
+                    <div class="failed-track-title">${escapeHtml(track.title)}</div>
+                    <div class="failed-track-artist">${escapeHtml(track.artist)}${reasonText}</div>
+                </div>
+                <div class="failed-track-number">#${track.index}</div>
+            `;
+            list.appendChild(item);
+        });
+
+        // Mostrar modal
+        modal.style.display = 'flex';
+
+        // Configurar eventos de botones
+        setupFailedTracksEvents();
+    }
+
+    // Función para cerrar modal de canciones fallidas
+    function closeFailedTracksModal() {
+        const modal = document.getElementById('failed-tracks-modal');
+        modal.style.display = 'none';
+        currentFailedTracks = [];
+    }
+
+    // Exponer función globalmente para el onclick en HTML
+    window.closeFailedTracksModal = closeFailedTracksModal;
+
+    // Configurar eventos del modal de canciones fallidas
+    function setupFailedTracksEvents() {
+        const retryBtn = document.getElementById('retry-failed-btn');
+        const copyBtn = document.getElementById('copy-failed-btn');
+
+        // Reintentar canciones fallidas
+        retryBtn.onclick = async () => {
+            if (currentFailedTracks.length === 0) return;
+
+            retryBtn.disabled = true;
+            retryBtn.textContent = 'Retrying...';
+
+            let retrySuccessCount = 0;
+            const stillFailed = [];
+
+            for (const track of currentFailedTracks) {
+                const success = await addSpotifyTrackToQueue({
+                    title: track.title,
+                    artist: track.artist
+                }, false);
+
+                if (success) {
+                    retrySuccessCount++;
+                } else {
+                    stillFailed.push(track);
+                }
+            }
+
+            retryBtn.disabled = false;
+            retryBtn.textContent = 'Retry Failed Tracks';
+
+            if (retrySuccessCount > 0) {
+                showNotification(`✓ Found ${retrySuccessCount} additional tracks!`, 'success');
+            }
+
+            if (stillFailed.length === 0) {
+                closeFailedTracksModal();
+                showNotification('All tracks found successfully!', 'success');
+            } else {
+                // Actualizar modal con canciones que siguen fallando
+                showFailedTracksModal(stillFailed);
+            }
+        };
+
+        // Copiar lista de canciones
+        copyBtn.onclick = () => {
+            const trackList = currentFailedTracks.map(track => 
+                `${track.index}. ${track.title} - ${track.artist}`
+            ).join('\n');
+
+            navigator.clipboard.writeText(trackList).then(() => {
+                showNotification('Track list copied to clipboard', 'info');
+            }).catch(() => {
+                // Fallback para navegadores que no soportan clipboard API
+                const textarea = document.createElement('textarea');
+                textarea.value = trackList;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showNotification('Track list copied to clipboard', 'info');
+            });
+        };
+
+        // Cerrar modal al hacer clic fuera
+        const modal = document.getElementById('failed-tracks-modal');
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                closeFailedTracksModal();
+            }
+        };
     }
 
     function escapeHtml(text) {

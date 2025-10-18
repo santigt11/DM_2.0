@@ -1756,3 +1756,165 @@ input:checked + .slider:before {
         opacity: 0;
     }
 }
+
+/* Modal para canciones fallidas */
+#failed-tracks-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+#failed-tracks-modal .modal-content {
+    background: var(--bg-color);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+#failed-tracks-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#failed-tracks-modal .modal-header h3 {
+    color: var(--text-color);
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+#failed-tracks-modal .close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+#failed-tracks-modal .close-btn:hover {
+    background: var(--border-color);
+    color: var(--text-color);
+}
+
+#failed-tracks-modal .modal-body {
+    color: var(--text-color);
+}
+
+.failed-summary {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 8px;
+    color: #ffc107;
+    font-weight: 500;
+}
+
+.failed-tracks-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--sidebar-bg);
+}
+
+.failed-track-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.failed-track-item:last-child {
+    border-bottom: none;
+}
+
+.failed-track-info {
+    flex: 1;
+}
+
+.failed-track-title {
+    font-weight: 500;
+    color: var(--text-color);
+    margin-bottom: 4px;
+}
+
+.failed-track-artist {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.failed-track-number {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 40px;
+}
+
+.failed-tracks-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.retry-btn, .copy-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+}
+
+.retry-btn {
+    background: var(--primary-color);
+    color: white;
+}
+
+.retry-btn:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+}
+
+.copy-btn {
+    background: var(--border-color);
+    color: var(--text-color);
+}
+
+.copy-btn:hover {
+    background: var(--text-secondary);
+    color: var(--bg-color);
+}
+
+.retry-btn:disabled {
+    background: var(--border-color);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    transform: none;
+}
