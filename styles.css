@@ -1918,3 +1918,105 @@ input:checked + .slider:before {
     cursor: not-allowed;
     transform: none;
 }
+
+/* Responsive adjustments for mobile devices */
+@media (max-width: 900px) {
+    .app-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+        grid-template-areas:
+            "sidebar"
+            "main"
+            "player";
+        height: auto;
+    }
+
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 72%;
+        max-width: 320px;
+        transform: translateX(-110%);
+        background-color: var(--background);
+        z-index: 3000;
+        padding: 1rem;
+        box-shadow: 6px 0 24px rgba(0,0,0,0.6);
+    }
+
+    .sidebar.is-open {
+        transform: translateX(0);
+    }
+
+    .sidebar-logo span { display: none; }
+
+    .hamburger-menu {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .main-content {
+        padding: 1rem;
+        margin-top: 56px; /* espacio para header/hamburger */
+    }
+
+    .now-playing-bar {
+        grid-template-columns: 1fr auto;
+        padding: 0.75rem 1rem;
+        gap: 0.5rem;
+    }
+
+    .sidebar-nav .nav-item a {
+        padding: .65rem;
+    }
+
+    /* Increase tappable sizes */
+    .btn-icon, .primary-btn, .secondary-btn {
+        min-height: 44px;
+        padding: 0.6rem 1rem;
+        font-size: 15px;
+    }
+
+    /* Make modals full-width on small screens */
+    #queue-modal, #spotify-modal, .modal-content {
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 0;
+        margin: 0;
+        padding: 0.75rem;
+    }
+
+    #queue-modal { padding: 0.5rem; }
+    #spotify-modal { padding: 0.5rem; }
+
+    /* Spotify modal content adjustments */
+    #spotify-modal-header h3 { font-size: 1rem; }
+    #spotify-playlist-details h4 { font-size: 1rem; }
+
+    /* Spotify tracks list stack */
+    .spotify-track-item { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem; }
+    .spotify-track-title { font-size: 0.95rem; }
+
+    /* Failed tracks modal full-screen adjustments */
+    #failed-tracks-modal .modal-content { padding: 12px; height: 100%; box-sizing: border-box; overflow-y: auto; }
+
+    /* Hide non-essential text in header/nav to save space */
+    .main-header .help-text, .sidebar .help-text { display: none; }
+}
+
+@media (max-width: 480px) {
+    .search-bar input { font-size: 14px; }
+    .section-title { font-size: 1.25rem; }
+    .section-subtitle { font-size: 0.95rem; }
+    .spotify-track-artist { font-size: 13px; }
+}
+
+/* Prevent background scroll when modal is open (used by JS) */
+.modal-open {
+    overflow: hidden;
+    touch-action: none;
+}

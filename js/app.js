@@ -417,15 +417,18 @@ document.addEventListener('DOMContentLoaded', () => {
     queueBtn.addEventListener('click', () => {
         renderQueue();
         queueModalOverlay.style.display = 'flex';
+        document.body.classList.add('modal-open');
     });
 
     closeQueueBtn.addEventListener('click', () => {
         queueModalOverlay.style.display = 'none';
+        document.body.classList.remove('modal-open');
     });
 
     queueModalOverlay.addEventListener('click', e => {
         if (e.target === queueModalOverlay) {
             queueModalOverlay.style.display = 'none';
+            document.body.classList.remove('modal-open');
         }
     });
 
@@ -762,16 +765,19 @@ document.addEventListener('DOMContentLoaded', () => {
     spotifyNavBtn.addEventListener('click', (e) => {
         e.preventDefault();
         spotifyModal.style.display = 'flex';
+        document.body.classList.add('modal-open');
     });
 
     // Cerrar modal
     closeSpotifyBtn.addEventListener('click', () => {
         spotifyModal.style.display = 'none';
+        document.body.classList.remove('modal-open');
     });
 
     spotifyModal.addEventListener('click', (e) => {
         if (e.target === spotifyModal) {
             spotifyModal.style.display = 'none';
+            document.body.classList.remove('modal-open');
         }
     });
 
@@ -1108,8 +1114,9 @@ document.addEventListener('DOMContentLoaded', () => {
             list.appendChild(item);
         });
 
-        // Mostrar modal
-        modal.style.display = 'flex';
+    // Mostrar modal
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-open');
 
         // Configurar eventos de botones
         setupFailedTracksEvents();
@@ -1120,6 +1127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = document.getElementById('failed-tracks-modal');
         modal.style.display = 'none';
         currentFailedTracks = [];
+        document.body.classList.remove('modal-open');
     }
 
     // Exponer función globalmente para el onclick en HTML

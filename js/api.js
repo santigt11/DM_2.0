@@ -465,6 +465,10 @@ async searchAlbums(query) {
     }
 
     async _downloadWithMetadata(streamUrl, filename, trackMetadata, quality) {
+        // Preparar metadatos con logging detallado
+        console.log('[METADATA] Preparing metadata for track:', trackMetadata.title);
+        console.log('[METADATA] Full track data:', trackMetadata);
+        
         const metadata = {
             title: trackMetadata.title,
             artist: trackMetadata.artist?.name,
@@ -478,6 +482,20 @@ async searchAlbums(query) {
             coverUrl: this.getCoverUrl(trackMetadata.album?.cover, '1280'),
             filename: filename
         };
+
+        // Log de metadatos preparados
+        console.log('[METADATA] Prepared metadata:', metadata);
+        
+        // Verificar campos críticos
+        const missingFields = [];
+        if (!metadata.title) missingFields.push('title');
+        if (!metadata.artist) missingFields.push('artist');
+        if (!metadata.album) missingFields.push('album');
+        if (!metadata.coverUrl || metadata.coverUrl.includes('picsum.photos')) missingFields.push('cover');
+        
+        if (missingFields.length > 0) {
+            console.warn('[METADATA] Missing fields:', missingFields.join(', '));
+        }
 
         // Detectar si estamos en localhost o en producción
         const isLocalhost = location.hostname === 'localhost' || 
@@ -518,11 +536,22 @@ async searchAlbums(query) {
 
         // Verificar si se agregaron metadatos
         const metadataAdded = response.headers.get('X-Metadata-Added') === 'true';
+        const metadataError = response.headers.get('X-Metadata-Error');
+        
         if (!metadataAdded) {
-            console.warn('⚠️ File downloaded but metadata could NOT be added');
-            showNotification('Downloaded without metadata (check Vercel logs)', 'warning');
+            const errorMsg = metadataError ? `Metadata failed: ${metadataError}` : 'Metadata could not be added (check Vercel logs)';
+            console.warn('⚠️ File downloaded but metadata could NOT be added:', errorMsg);
+            
+            // Mostrar notificación con más detalles
+            if (window.showNotification) {
+                window.showNotification(`Downloaded "${filename}" without metadata`, 'warning');
+                console.log(`[DOWNLOAD] Metadata error details: ${errorMsg}`);
+            }
         } else {
             console.log('✓ File downloaded with metadata successfully');
+            if (window.showNotification) {
+                window.showNotification(`Downloaded "${filename}" with metadata`, 'success');
+            }
         }
 
         const blob = await response.blob();
