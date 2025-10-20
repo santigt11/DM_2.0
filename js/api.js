@@ -465,16 +465,14 @@ async searchAlbums(query) {
     }
 
     async _downloadWithMetadata(streamUrl, filename, trackMetadata, quality) {
-        // Preparar metadatos con logging detallado
-        console.log('[METADATA] Preparing metadata for track:', trackMetadata.title);
-        console.log('[METADATA] Full track data:', trackMetadata);
+        console.log('[METADATA] Preparing metadata...');
         
         const metadata = {
             title: trackMetadata.title,
             artist: trackMetadata.artist?.name,
             album: trackMetadata.album?.title,
             albumArtist: trackMetadata.album?.artist?.name || trackMetadata.artist?.name,
-            date: trackMetadata.album?.releaseDate?.substring(0, 4), // Solo año
+            date: trackMetadata.album?.releaseDate?.substring(0, 4),
             trackNumber: trackMetadata.trackNumber,
             totalTracks: trackMetadata.album?.numberOfTracks,
             discNumber: trackMetadata.volumeNumber || 1,
@@ -483,69 +481,33 @@ async searchAlbums(query) {
             filename: filename
         };
 
-        // Log de metadatos preparados
-        console.log('[METADATA] Prepared metadata:', metadata);
+        console.log('[METADATA] Prepared:', metadata);
         
-        // Verificar campos críticos
-        const missingFields = [];
-        if (!metadata.title) missingFields.push('title');
-        if (!metadata.artist) missingFields.push('artist');
-        if (!metadata.album) missingFields.push('album');
-        if (!metadata.coverUrl || metadata.coverUrl.includes('picsum.photos')) missingFields.push('cover');
-        
-        if (missingFields.length > 0) {
-            console.warn('[METADATA] Missing fields:', missingFields.join(', '));
-        }
-
-        // Detectar si estamos en localhost o en producción
-        const isLocalhost = location.hostname === 'localhost' || 
-                           location.hostname === '127.0.0.1' ||
-                           location.hostname === '[::1]';
-        
-        const downloadUrl = isLocalhost 
-            ? 'http://localhost:8001/api/download'  // Desarrollo local
-            : '/api/download';  // Producción (Vercel serverless function)
+        // Detectar endpoint (localhost o producción)
+        const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+        const downloadUrl = isLocalhost ? 'http://localhost:8001/api/download' : '/api/download';
 
         const response = await fetch(downloadUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                streamUrl: streamUrl,
-                metadata: metadata,
-                quality: quality
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ streamUrl, metadata, quality })
         });
 
         if (!response.ok) {
-            // Intentar leer el mensaje de error detallado
-            let errorDetails = `Server error: ${response.status}`;
+            let errorMsg = `Server error: ${response.status}`;
             try {
-                const contentType = response.headers.get('Content-Type');
-                if (contentType && contentType.includes('application/json')) {
-                    const errorData = await response.json();
-                    errorDetails = errorData.error || errorDetails;
-                    console.error('[DOWNLOAD] Server error details:', errorData);
-                }
-            } catch (e) {
-                // Si no se puede parsear, usar mensaje genérico
-            }
-            throw new Error(errorDetails);
+                const data = await response.json();
+                errorMsg = data.error || errorMsg;
+            } catch (e) {}
+            console.error('[DOWNLOAD] Server error:', errorMsg);
+            throw new Error(errorMsg);
         }
 
-        // Verificar si se agregaron metadatos
         const metadataAdded = response.headers.get('X-Metadata-Added') === 'true';
-        const metadataError = response.headers.get('X-Metadata-Error');
-        
         if (!metadataAdded) {
-            const errorMsg = metadataError ? `Metadata failed: ${metadataError}` : 'Metadata could not be added (check Vercel logs)';
-            console.warn('⚠️ File downloaded but metadata could NOT be added:', errorMsg);
-            
-            // Mostrar notificación con más detalles
+            console.warn('[METADATA] Could not be added to file');
             if (window.showNotification) {
                 window.showNotification(`Downloaded "${filename}" without metadata`, 'warning');
-                console.log(`[DOWNLOAD] Metadata error details: ${errorMsg}`);
             }
         } else {
             console.log('✓ File downloaded with metadata successfully');
@@ -554,6 +516,7 @@ async searchAlbums(query) {
             }
         }
 
+        // Descargar archivo desde la respuesta base64
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         
@@ -564,6 +527,8 @@ async searchAlbums(query) {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        
+        console.log(`[DOWNLOAD] ✓ File saved: ${filename}`);
     }
 
     getCoverUrl(id, size = '1280') {
