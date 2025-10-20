@@ -90,23 +90,23 @@ class handler(BaseHTTPRequestHandler):
             audio = FLAC(file_path)
             
             if metadata.get("title"):
-                audio["title"] = metadata["title"]
+                audio["TITLE"] = metadata["title"]
             if metadata.get("artist"):
-                audio["artist"] = metadata["artist"]
+                audio["ARTIST"] = metadata["artist"]
             if metadata.get("album"):
-                audio["album"] = metadata["album"]
+                audio["ALBUM"] = metadata["album"]
             if metadata.get("albumArtist"):
-                audio["albumartist"] = metadata["albumArtist"]
+                audio["ALBUMARTIST"] = metadata["albumArtist"]
             if metadata.get("date"):
-                audio["date"] = metadata["date"]
+                audio["DATE"] = str(metadata["date"])
             if metadata.get("genre"):
-                audio["genre"] = metadata["genre"]
+                audio["GENRE"] = metadata["genre"]
             if metadata.get("trackNumber"):
-                audio["tracknumber"] = str(metadata["trackNumber"])
+                audio["TRACKNUMBER"] = str(metadata["trackNumber"])
             if metadata.get("totalTracks"):
-                audio["totaltracks"] = str(metadata["totalTracks"])
+                audio["TOTALTRACKS"] = str(metadata["totalTracks"])
             if metadata.get("discNumber"):
-                audio["discnumber"] = str(metadata["discNumber"])
+                audio["DISCNUMBER"] = str(metadata["discNumber"])
             
             cover_url = metadata.get("coverUrl")
             if cover_url:
@@ -120,7 +120,6 @@ class handler(BaseHTTPRequestHandler):
                     picture.desc = "Cover"
                     picture.data = cover_response.content
                     
-                    audio.clear_pictures()
                     audio.add_picture(picture)
                 except Exception:
                     pass
