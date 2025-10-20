@@ -1144,6 +1144,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
+            // Log para debug
+            if (bestMatch) {
+                console.log(`[MATCH] "${spotifyTrack.title}" -> "${bestMatch.title}" by ${bestMatch.artist?.name} (score: ${highestScore})`);
+            }
+            
             // Solo agregar si hay match razonable (mínimo 100 puntos = buena coincidencia)
             if (bestMatch && highestScore >= 100) {
                 const added = player.addToQueue(bestMatch);
