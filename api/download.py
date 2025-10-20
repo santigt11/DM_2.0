@@ -20,18 +20,36 @@ def handler(request):
     
     tmp_path = None
     try:
-        # Parse request
+        # Parse request - manejo defensivo
+        logger.info("[DOWNLOAD] Handler started")
+        logger.info(f"[DOWNLOAD] Request method: {request.method}")
+        logger.info(f"[DOWNLOAD] Request body type: {type(request.body)}")
+        
+        body = None
+        if request.body is None:
+            logger.error("[ERROR] Request body is None")
+            return error_response(400, "Request body is empty")
+        
         if isinstance(request.body, bytes):
             body = request.body.decode("utf-8")
         else:
-            body = request.body
-        data = json.loads(body)
+            body = str(request.body)
+        
+        logger.info(f"[DOWNLOAD] Body length: {len(body)} chars")
+        
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            logger.error(f"[ERROR] JSON decode error: {e}")
+            logger.error(f"[ERROR] Body sample: {body[:200]}")
+            return error_response(400, f"Invalid JSON: {e}")
         
         stream_url = data.get("streamUrl")
         metadata = data.get("metadata", {})
         quality = data.get("quality", "LOSSLESS")
         
         if not stream_url:
+            logger.error("[ERROR] Missing streamUrl in request")
             return error_response(400, "Missing streamUrl")
         
         logger.info(f"[DOWNLOAD] Track: {metadata.get('title', 'Unknown')}")
@@ -40,8 +58,12 @@ def handler(request):
         logger.info("[DOWNLOAD] Fetching stream...")
         try:
             response = requests.get(stream_url, stream=True, timeout=60)
+            logger.info(f"[DOWNLOAD] Stream response: {response.status_code}")
             if response.status_code != 200:
                 return error_response(response.status_code, f"Stream fetch failed: {response.status_code}")
+        except requests.Timeout:
+            logger.error("[ERROR] Stream request timeout")
+            return error_response(504, "Stream request timeout")
         except Exception as e:
             logger.error(f"[DOWNLOAD] Stream request failed: {e}", exc_info=True)
             return error_response(504, f"Stream request failed: {str(e)}")
@@ -54,6 +76,7 @@ def handler(request):
         # Save to temporary file
         logger.info("[DOWNLOAD] Writing to temp file...")
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".flac" if is_flac else ".m4a")
+        logger.info(f"[DOWNLOAD] Temp path: {tmp_path}")
         
         try:
             with os.fdopen(tmp_fd, "wb") as tmp_file:
@@ -80,10 +103,10 @@ def handler(request):
                     logger.info("[METADATA] ✓ Success")
             except ImportError as e:
                 logger.error(f"[METADATA] Import error (Mutagen missing?): {e}", exc_info=True)
-                metadata_error = f"Mutagen not available: {str(e)}"
+                metadata_error = f"Mutagen not available"
             except Exception as e:
                 logger.error(f"[METADATA] Failed: {e}", exc_info=True)
-                metadata_error = str(e)
+                metadata_error = str(e)[:100]
             
             # Read final file
             logger.info("[DOWNLOAD] Reading final file...")
@@ -94,7 +117,11 @@ def handler(request):
             logger.info(f"[DOWNLOAD] Final size: {final_size / 1024 / 1024:.2f} MB")
             
             # Return response
+            logger.info("[DOWNLOAD] Encoding to base64...")
             file_b64 = b64encode(file_data).decode("utf-8")
+            b64_size = len(file_b64)
+            logger.info(f"[DOWNLOAD] Base64 size: {b64_size / 1024 / 1024:.2f} MB")
+            
             filename = metadata.get("filename", f"track.{'flac' if is_flac else 'm4a'}")
             
             response_headers = {
@@ -105,9 +132,9 @@ def handler(request):
             }
             
             if metadata_error:
-                response_headers["X-Metadata-Error"] = metadata_error[:200]
+                response_headers["X-Metadata-Error"] = metadata_error
             
-            logger.info(f"[DOWNLOAD] ✓ Ready to send ({len(file_b64)} chars base64, metadata: {'✓' if metadata_added else '✗'})")
+            logger.info(f"[DOWNLOAD] ✓ Success (metadata: {'✓' if metadata_added else '✗'})")
             
             return {
                 "statusCode": 200,
@@ -126,13 +153,14 @@ def handler(request):
     
     except Exception as e:
         logger.error(f"[ERROR] Unhandled exception: {str(e)}", exc_info=True)
+        logger.error(f"[ERROR] Full traceback: {traceback.format_exc()}")
         # Asegurar limpieza incluso en error
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
             except:
                 pass
-        return error_response(500, f"Server error: {str(e)}")
+        return error_response(500, f"Server error")
 
 
 def add_flac_metadata(filepath, metadata):
