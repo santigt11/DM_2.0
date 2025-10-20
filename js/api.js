@@ -466,6 +466,10 @@ async searchAlbums(query) {
 
     async _downloadWithMetadata(streamUrl, filename, trackMetadata, quality) {
         console.log('[METADATA] Preparing metadata...');
+        console.log('[METADATA] Preparing metadata...');
+        console.log('[METADATA] trackMetadata.album:', trackMetadata.album);
+        console.log('[METADATA] trackMetadata.album?.artist:', trackMetadata.album?.artist);
+        console.log('[METADATA] trackMetadata.artists:', trackMetadata.artists);
         
         const metadata = {
             title: trackMetadata.title,
