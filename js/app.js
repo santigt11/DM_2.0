@@ -1025,6 +1025,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Función para buscar una canción de Spotify en TIDAL y agregarla a la cola
     async function addSpotifyTrackToQueue(spotifyTrack, showNotif = true) {
         try {
+            // Limpiar título antes de buscar
+            const cleanForSearch = (title) => {
+                return title
+                    .replace(/\([^)]*\)/g, '') // Remover paréntesis
+                    .replace(/\[[^\]]*\]/g, '') // Remover corchetes
+                    .replace(/\s*[-–—|]\s*.+$/, '') // Remover " - artista" o " | info"
+                    .replace(/\s*(feat|ft|featuring|with|vs|x)\s*.+$/i, '') // Remover feat
+                    .trim();
+            };
+            
+            const searchTitle = cleanForSearch(spotifyTrack.title);
+            
             let results = null;
             
             // Estrategia 1: Buscar por ISRC (más preciso)
@@ -1032,15 +1044,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 results = await api.searchTracks(spotifyTrack.isrc);
             }
             
-            // Estrategia 2: Si no hay resultados, buscar por título + artista
+            // Estrategia 2: Si no hay resultados, buscar por título limpio + artista
             if (!results?.items || results.items.length === 0) {
-                const query = `${spotifyTrack.title} ${spotifyTrack.artist}`;
+                const query = `${searchTitle} ${spotifyTrack.artist}`;
                 results = await api.searchTracks(query);
             }
             
-            // Estrategia 3: Si aún no hay resultados, buscar solo por título
+            // Estrategia 3: Si aún no hay resultados, buscar solo por título limpio
             if (!results?.items || results.items.length === 0) {
-                results = await api.searchTracks(spotifyTrack.title);
+                results = await api.searchTracks(searchTitle);
             }
             
             if (!results?.items || results.items.length === 0) {
