@@ -3,6 +3,7 @@ import json
 import requests
 import tempfile
 import os
+import unicodedata
 from mutagen.flac import FLAC, Picture
 from mutagen.mp4 import MP4, MP4Cover
 
@@ -14,6 +15,16 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def _sanitize_filename(self, filename):
+        """Sanitiza el filename para remover caracteres no-ASCII"""
+        # Normalizar unicode (convierte caracteres especiales a su forma base)
+        normalized = unicodedata.normalize('NFKD', filename)
+        # Remover caracteres no-ASCII
+        ascii_only = normalized.encode('ascii', 'ignore').decode('ascii')
+        # Reemplazar múltiples espacios con uno solo
+        cleaned = ' '.join(ascii_only.split())
+        return cleaned if cleaned else 'download.flac'
 
     def do_POST(self):
         try:
@@ -47,10 +58,13 @@ class handler(BaseHTTPRequestHandler):
                 with open(tmp_path, "rb") as f:
                     file_data = f.read()
                 
+                # Sanitizar filename para evitar caracteres no-ASCII en headers
+                safe_filename = self._sanitize_filename(filename)
+                
                 self.send_response(200)
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Content-Type", f"audio/{file_ext}")
-                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Disposition", f'attachment; filename="{safe_filename}"')
                 self.send_header("Content-Length", str(len(file_data)))
                 self.end_headers()
                 self.wfile.write(file_data)
@@ -85,6 +99,12 @@ class handler(BaseHTTPRequestHandler):
                 audio["date"] = metadata["date"]
             if metadata.get("genre"):
                 audio["genre"] = metadata["genre"]
+            if metadata.get("trackNumber"):
+                audio["tracknumber"] = str(metadata["trackNumber"])
+            if metadata.get("totalTracks"):
+                audio["totaltracks"] = str(metadata["totalTracks"])
+            if metadata.get("discNumber"):
+                audio["discnumber"] = str(metadata["discNumber"])
             
             cover_url = metadata.get("coverUrl")
             if cover_url:
@@ -121,6 +141,13 @@ class handler(BaseHTTPRequestHandler):
                 audio["\xa9day"] = metadata["date"]
             if metadata.get("genre"):
                 audio["\xa9gen"] = metadata["genre"]
+            if metadata.get("trackNumber"):
+                # M4A usa una tupla (track_number, total_tracks)
+                track_num = metadata["trackNumber"]
+                total_tracks = metadata.get("totalTracks", 0)
+                audio["trkn"] = [(track_num, total_tracks)]
+            if metadata.get("discNumber"):
+                audio["disk"] = [(metadata["discNumber"], 0)]
             
             cover_url = metadata.get("coverUrl")
             if cover_url:
