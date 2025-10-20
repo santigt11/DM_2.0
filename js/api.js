@@ -500,7 +500,7 @@ async searchAlbums(query) {
                 const response = await fetch(endpoint.url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ streamUrl, metadata, quality }),
+                    body: JSON.stringify({ streamUrl, filename, metadata, quality }),
                     signal: AbortSignal.timeout(90000)  // 90 segundos timeout
                 });
 
