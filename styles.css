@@ -34,7 +34,6 @@ html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
 }
 
 body {
@@ -42,8 +41,6 @@ body {
     color: var(--foreground);
     font-family: 'Inter', sans-serif;
     overflow: hidden;
-    -webkit-user-select: none;
-    user-select: none;
 }
 
 /* Permitir selección de texto en inputs y elementos específicos */
@@ -1365,10 +1362,16 @@ input:checked + .slider:before {
         justify-content: center;
     }
     
-    /* Scroll suave en listas */
+    /* Scroll suave en listas - permitir scroll normal */
     .track-list, .main-content, #queue-list {
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
+        touch-action: pan-y pan-x;
+    }
+    
+    /* Asegurar que el contenedor principal pueda scrollear */
+    .app-container {
+        touch-action: pan-y;
     }
     
     /* Optimizar rendimiento de animaciones */
@@ -1404,8 +1407,11 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 768px) {
-    body {
+    html, body {
         overflow: hidden;
+        position: fixed;
+        width: 100%;
+        height: 100%;
     }
     
     .app-container {
@@ -1416,15 +1422,18 @@ input:checked + .slider:before {
             "player";
         height: 100vh;
         height: 100dvh; /* Soporte para Dynamic Viewport Height */
+        overflow: hidden;
     }
     
     .main-content {
         padding: 0;
         grid-area: main;
-        overflow-y: auto;
+        overflow-y: scroll;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
         height: 100%;
+        position: relative;
     }
     
     .main-header {
