@@ -1037,22 +1037,29 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const searchTitle = cleanForSearch(spotifyTrack.title);
             
+            console.log(`[SEARCH] Spotify: "${spotifyTrack.title}" -> Clean: "${searchTitle}"`);
+            
             let results = null;
             
             // Estrategia 1: Buscar por ISRC (más preciso)
             if (spotifyTrack.isrc) {
+                console.log(`[SEARCH] Trying ISRC: ${spotifyTrack.isrc}`);
                 results = await api.searchTracks(spotifyTrack.isrc);
             }
             
             // Estrategia 2: Si no hay resultados, buscar por título limpio + artista
             if (!results?.items || results.items.length === 0) {
                 const query = `${searchTitle} ${spotifyTrack.artist}`;
+                console.log(`[SEARCH] Trying title+artist: "${query}"`);
                 results = await api.searchTracks(query);
+                console.log(`[SEARCH] Results: ${results?.items?.length || 0}`);
             }
             
             // Estrategia 3: Si aún no hay resultados, buscar solo por título limpio
             if (!results?.items || results.items.length === 0) {
+                console.log(`[SEARCH] Trying title only: "${searchTitle}"`);
                 results = await api.searchTracks(searchTitle);
+                console.log(`[SEARCH] Results: ${results?.items?.length || 0}`);
             }
             
             if (!results?.items || results.items.length === 0) {
