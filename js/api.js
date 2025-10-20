@@ -493,11 +493,19 @@ async searchAlbums(query) {
             body: JSON.stringify({ streamUrl, metadata, quality })
         });
 
+        // Caso especial: archivo muy grande (>4.5MB)
+        if (response.status === 413) {
+            console.warn('[DOWNLOAD] File too large for server processing (>4.5MB)');
+            console.warn('[DOWNLOAD] Falling back to direct download without metadata');
+            throw new Error('File too large');  // Forzar fallback
+        }
+
         if (!response.ok) {
             let errorMsg = `Server error: ${response.status}`;
             try {
                 const data = await response.json();
                 errorMsg = data.error || errorMsg;
+                console.error('[DOWNLOAD] Server response:', data);
             } catch (e) {}
             console.error('[DOWNLOAD] Server error:', errorMsg);
             throw new Error(errorMsg);
@@ -516,7 +524,7 @@ async searchAlbums(query) {
             }
         }
 
-        // Descargar archivo desde la respuesta base64
+        // Descargar archivo desde la respuesta
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         
