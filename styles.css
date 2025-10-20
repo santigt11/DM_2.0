@@ -1404,27 +1404,36 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 768px) {
+    body {
+        overflow: hidden;
+    }
+    
     .app-container {
         grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr auto;
+        grid-template-rows: 1fr auto;
         grid-template-areas: 
-            "header" 
             "main" 
             "player";
+        height: 100vh;
+        height: 100dvh; /* Soporte para Dynamic Viewport Height */
     }
     
     .main-content {
-        padding: var(--spacing-sm) var(--spacing-md);
+        padding: 0;
         grid-area: main;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        height: 100%;
     }
     
     .main-header {
-        grid-area: header;
-        padding: var(--spacing-md) var(--spacing-md) var(--spacing-sm) var(--spacing-md);
-        margin-bottom: 0;
         position: sticky;
         top: 0;
-        background: linear-gradient(to bottom, var(--background) 80%, transparent);
+        padding: var(--spacing-md);
+        margin-bottom: 0;
+        background-color: var(--background);
+        border-bottom: 1px solid var(--border);
         z-index: 100;
         backdrop-filter: blur(10px);
     }
@@ -1476,6 +1485,7 @@ input:checked + .slider:before {
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
         margin-bottom: var(--spacing-md);
+        padding: 0 var(--spacing-md);
     }
     
     .search-tabs::-webkit-scrollbar {
@@ -1489,14 +1499,31 @@ input:checked + .slider:before {
         white-space: nowrap;
     }
     
+    /* Estilos para la vista de búsqueda */
+    .search-results,
+    .search-tab-content {
+        padding: 0 var(--spacing-md);
+    }
+    
     .content-section {
         margin-bottom: var(--spacing-lg);
+        padding: 0 var(--spacing-md);
     }
     
     .section-title {
         font-size: 1.25rem;
         margin-bottom: var(--spacing-md);
         font-weight: 700;
+    }
+    
+    /* Asegurar que el primer elemento tenga padding top */
+    .main-content > *:first-child {
+        padding-top: var(--spacing-md);
+    }
+    
+    /* Asegurar que el último elemento tenga padding bottom */
+    .main-content > *:last-child {
+        padding-bottom: var(--spacing-xl);
     }
     
     .card-grid {
@@ -1562,9 +1589,11 @@ input:checked + .slider:before {
         grid-template-columns: 1fr;
         grid-template-rows: auto auto auto;
         gap: var(--spacing-xs);
-        padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+        padding: var(--spacing-sm) var(--spacing-md) env(safe-area-inset-bottom, var(--spacing-md));
         height: auto;
+        min-height: 140px;
         max-height: 180px;
+        flex-shrink: 0;
     }
     
     .now-playing-bar .track-info {
@@ -1707,12 +1736,12 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 480px) {
-    .main-content {
-        padding: var(--spacing-xs) var(--spacing-sm);
+    .main-header {
+        padding: var(--spacing-sm) var(--spacing-md);
     }
     
-    .main-header {
-        padding: var(--spacing-sm);
+    .content-section {
+        padding: 0 var(--spacing-sm);
     }
     
     .card-grid {
