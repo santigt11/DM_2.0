@@ -1057,15 +1057,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 .replace(/[^\w\s]/g, '') // Remover símbolos
                 .trim();
             
+            // Función para limpiar título de Spotify (remover partes entre paréntesis, feat, etc.)
+            const cleanTitle = (title) => {
+                return title
+                    .replace(/\([^)]*\)/g, '') // Remover todo entre paréntesis
+                    .replace(/\[[^\]]*\]/g, '') // Remover todo entre corchetes
+                    .replace(/\s*[-–—]\s*.+$/, '') // Remover " - artista" o " - detalles" al final
+                    .replace(/\s*(feat|ft|featuring|with|vs|x)\s*.+$/i, '') // Remover colaboradores
+                    .trim();
+            };
+            
             // Buscar el mejor match validando título Y artista
-            const spotifyTitleNorm = normalize(spotifyTrack.title);
+            const spotifyTitleClean = cleanTitle(spotifyTrack.title);
+            const spotifyTitleNorm = normalize(spotifyTitleClean);
             const spotifyArtistNorm = normalize(spotifyTrack.artist);
             
             let bestMatch = null;
             let highestScore = 0;
             
             for (const item of results.items) {
-                const tidalTitleNorm = normalize(item.title);
+                const tidalTitleClean = cleanTitle(item.title);
+                const tidalTitleNorm = normalize(tidalTitleClean);
                 const tidalArtistNorm = normalize(item.artist?.name || '');
                 
                 // Calcular score de similitud
@@ -1073,12 +1085,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Match de título (más importante)
                 if (tidalTitleNorm === spotifyTitleNorm) score += 100;
-                else if (tidalTitleNorm.includes(spotifyTitleNorm) || spotifyTitleNorm.includes(tidalTitleNorm)) score += 50;
+                else if (tidalTitleNorm.includes(spotifyTitleNorm) || spotifyTitleNorm.includes(tidalTitleNorm)) score += 70;
                 
                 // Match de artista (crítico para evitar errores)
                 if (tidalArtistNorm === spotifyArtistNorm) score += 100;
-                else if (tidalArtistNorm.includes(spotifyArtistNorm) || spotifyArtistNorm.includes(tidalArtistNorm)) score += 50;
-                else if (score > 0) score -= 50; // Penalizar si título coincide pero artista no
+                else if (tidalArtistNorm.includes(spotifyArtistNorm) || spotifyArtistNorm.includes(tidalArtistNorm)) score += 60;
+                else if (score > 0) score -= 30; // Penalizar menos si título coincide pero artista no
                 
                 if (score > highestScore) {
                     highestScore = score;
@@ -1086,8 +1098,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             
-            // Solo agregar si hay match razonable (título Y artista deben coincidir)
-            if (bestMatch && highestScore >= 100) {
+            // Solo agregar si hay match razonable (mínimo 130 puntos = título + artista parcial o mejor)
+            if (bestMatch && highestScore >= 130) {
                 const added = player.addToQueue(bestMatch);
                 
                 if (showNotif) {
