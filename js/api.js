@@ -483,60 +483,88 @@ async searchAlbums(query) {
 
         console.log('[METADATA] Prepared:', metadata);
         
-        // Detectar endpoint (localhost o producción)
-        const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-        const downloadUrl = isLocalhost ? 'http://localhost:8001/api/download' : '/api/download';
-
-        const response = await fetch(downloadUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ streamUrl, metadata, quality })
-        });
-
-        // Caso especial: archivo muy grande (>4.5MB)
-        if (response.status === 413) {
-            console.warn('[DOWNLOAD] File too large for server processing (>4.5MB)');
-            console.warn('[DOWNLOAD] Falling back to direct download without metadata');
-            throw new Error('File too large');  // Forzar fallback
-        }
-
-        if (!response.ok) {
-            let errorMsg = `Server error: ${response.status}`;
+        // Estrategia de descarga con metadatos:
+        // 1. Intentar servidor local (puerto 8001) - SIEMPRE primero, sin límite de tamaño
+        // 2. Si falla, intentar Vercel (solo archivos pequeños <4MB)
+        // 3. Si todo falla, lanzar error para fallback a descarga directa
+        
+        const endpoints = [
+            { url: 'http://localhost:8001/api/download', name: 'Local Server', limit: null },
+            { url: '/api/download', name: 'Vercel', limit: 4.5 * 1024 * 1024 }
+        ];
+        
+        for (const endpoint of endpoints) {
             try {
-                const data = await response.json();
-                errorMsg = data.error || errorMsg;
-                console.error('[DOWNLOAD] Server response:', data);
-            } catch (e) {}
-            console.error('[DOWNLOAD] Server error:', errorMsg);
-            throw new Error(errorMsg);
-        }
+                console.log(`[DOWNLOAD] Trying ${endpoint.name}...`);
+                
+                const response = await fetch(endpoint.url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ streamUrl, metadata, quality }),
+                    signal: AbortSignal.timeout(90000)  // 90 segundos timeout
+                });
 
-        const metadataAdded = response.headers.get('X-Metadata-Added') === 'true';
-        if (!metadataAdded) {
-            console.warn('[METADATA] Could not be added to file');
-            if (window.showNotification) {
-                window.showNotification(`Downloaded "${filename}" without metadata`, 'warning');
-            }
-        } else {
-            console.log('✓ File downloaded with metadata successfully');
-            if (window.showNotification) {
-                window.showNotification(`Downloaded "${filename}" with metadata`, 'success');
+                // Caso especial: archivo muy grande para Vercel
+                if (response.status === 413) {
+                    console.warn(`[DOWNLOAD] ${endpoint.name}: File too large (>4.5MB), trying next...`);
+                    continue;  // Probar siguiente endpoint
+                }
+
+                if (!response.ok) {
+                    let errorMsg = `${endpoint.name} error: ${response.status}`;
+                    try {
+                        const data = await response.json();
+                        errorMsg = data.error || errorMsg;
+                        console.error(`[DOWNLOAD] ${endpoint.name} response:`, data);
+                    } catch (e) {}
+                    console.error(`[DOWNLOAD] ${endpoint.name} failed:`, errorMsg);
+                    continue;  // Probar siguiente endpoint
+                }
+
+                // Éxito - procesar respuesta
+                const metadataAdded = response.headers.get('X-Metadata-Added') === 'true';
+                if (!metadataAdded) {
+                    console.warn('[METADATA] Could not be added to file');
+                    if (window.showNotification) {
+                        window.showNotification(`Downloaded "${filename}" without metadata`, 'warning');
+                    }
+                } else {
+                    console.log(`✓ File downloaded with metadata via ${endpoint.name}`);
+                    if (window.showNotification) {
+                        window.showNotification(`Downloaded "${filename}" with metadata`, 'success');
+                    }
+                }
+
+                // Descargar archivo desde la respuesta
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                console.log(`[DOWNLOAD] ✓ Success via ${endpoint.name}`);
+                return;  // Salir exitosamente
+                
+            } catch (error) {
+                if (error.name === 'TimeoutError') {
+                    console.warn(`[DOWNLOAD] ${endpoint.name}: Timeout`);
+                } else if (error.name === 'TypeError' && endpoint.name === 'Local Server') {
+                    console.warn(`[DOWNLOAD] ${endpoint.name}: Not running or unreachable`);
+                } else {
+                    console.warn(`[DOWNLOAD] ${endpoint.name}: ${error.message}`);
+                }
+                // Continuar con siguiente endpoint
             }
         }
-
-        // Descargar archivo desde la respuesta
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
         
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        console.log(`[DOWNLOAD] ✓ File saved: ${filename}`);
+        // Si llegamos aquí, todos los endpoints fallaron
+        console.error('[DOWNLOAD] All metadata servers failed, falling back to direct download');
+        throw new Error('All metadata servers failed');
     }
 
     getCoverUrl(id, size = '1280') {
