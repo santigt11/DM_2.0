@@ -1412,6 +1412,7 @@ input:checked + .slider:before {
         position: fixed;
         width: 100%;
         height: 100%;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
     }
     
     .app-container {
@@ -1598,10 +1599,12 @@ input:checked + .slider:before {
         grid-template-columns: 1fr;
         grid-template-rows: auto auto auto;
         gap: var(--spacing-xs);
-        padding: var(--spacing-sm) var(--spacing-md) env(safe-area-inset-bottom, var(--spacing-md));
+        padding-top: var(--spacing-sm);
+        padding-left: var(--spacing-md);
+        padding-right: var(--spacing-md);
+        padding-bottom: max(env(safe-area-inset-bottom), var(--spacing-md));
         height: auto;
         min-height: 140px;
-        max-height: 180px;
         flex-shrink: 0;
     }
     

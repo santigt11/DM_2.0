@@ -95,6 +95,8 @@ class handler(BaseHTTPRequestHandler):
                 audio["artist"] = metadata["artist"]
             if metadata.get("album"):
                 audio["album"] = metadata["album"]
+            if metadata.get("albumArtist"):
+                audio["albumartist"] = metadata["albumArtist"]
             if metadata.get("date"):
                 audio["date"] = metadata["date"]
             if metadata.get("genre"):
@@ -137,6 +139,8 @@ class handler(BaseHTTPRequestHandler):
                 audio["\xa9ART"] = metadata["artist"]
             if metadata.get("album"):
                 audio["\xa9alb"] = metadata["album"]
+            if metadata.get("albumArtist"):
+                audio["aART"] = metadata["albumArtist"]
             if metadata.get("date"):
                 audio["\xa9day"] = metadata["date"]
             if metadata.get("genre"):

@@ -197,11 +197,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const action = e.target.dataset.action;
         
         if (action === 'add-to-queue' && contextTrack) {
-            player.addToQueue(contextTrack);
+            const added = player.addToQueue(contextTrack);
             renderQueue();
             
             const notification = document.createElement('div');
-            notification.textContent = `✓ Added "${contextTrack.title}" to queue`;
+            notification.textContent = added 
+                ? `✓ Added "${contextTrack.title}" to queue` 
+                : `⚠ "${contextTrack.title}" already in queue`;
             notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
@@ -1049,32 +1051,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 return false;
             }
 
-            // Buscar el mejor match (título similar y artista similar)
-            let bestMatch = results.items[0];
-            const spotifyTitleLower = spotifyTrack.title.toLowerCase();
-            const spotifyArtistLower = spotifyTrack.artist.toLowerCase();
+            // Función para normalizar texto (remover acentos, símbolos, etc.)
+            const normalize = (str) => str.toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remover acentos
+                .replace(/[^\w\s]/g, '') // Remover símbolos
+                .trim();
+            
+            // Buscar el mejor match validando título Y artista
+            const spotifyTitleNorm = normalize(spotifyTrack.title);
+            const spotifyArtistNorm = normalize(spotifyTrack.artist);
+            
+            let bestMatch = null;
+            let highestScore = 0;
             
             for (const item of results.items) {
-                const tidalTitleLower = item.title.toLowerCase();
-                const tidalArtistLower = (item.artist?.name || '').toLowerCase();
+                const tidalTitleNorm = normalize(item.title);
+                const tidalArtistNorm = normalize(item.artist?.name || '');
                 
-                // Si encuentra match exacto de título y artista, usar ese
-                if (tidalTitleLower.includes(spotifyTitleLower) || spotifyTitleLower.includes(tidalTitleLower)) {
-                    if (tidalArtistLower.includes(spotifyArtistLower) || spotifyArtistLower.includes(tidalArtistLower)) {
-                        bestMatch = item;
-                        break;
-                    }
+                // Calcular score de similitud
+                let score = 0;
+                
+                // Match de título (más importante)
+                if (tidalTitleNorm === spotifyTitleNorm) score += 100;
+                else if (tidalTitleNorm.includes(spotifyTitleNorm) || spotifyTitleNorm.includes(tidalTitleNorm)) score += 50;
+                
+                // Match de artista (crítico para evitar errores)
+                if (tidalArtistNorm === spotifyArtistNorm) score += 100;
+                else if (tidalArtistNorm.includes(spotifyArtistNorm) || spotifyArtistNorm.includes(tidalArtistNorm)) score += 50;
+                else if (score > 0) score -= 50; // Penalizar si título coincide pero artista no
+                
+                if (score > highestScore) {
+                    highestScore = score;
+                    bestMatch = item;
                 }
             }
             
-            // Agregar a la cola
-            player.addToQueue(bestMatch);
-            
-            if (showNotif) {
-                showNotification(`Added "${bestMatch.title}"`, 'success');
+            // Solo agregar si hay match razonable (título Y artista deben coincidir)
+            if (bestMatch && highestScore >= 100) {
+                const added = player.addToQueue(bestMatch);
+                
+                if (showNotif) {
+                    if (added) {
+                        showNotification(`Added "${bestMatch.title}" by ${bestMatch.artist?.name}`, 'success');
+                    } else {
+                        showNotification(`"${bestMatch.title}" already in queue`, 'warning');
+                    }
+                }
+                
+                return true;
+            } else {
+                console.warn(`[SPOTIFY] No good match found for "${spotifyTrack.title}" by ${spotifyTrack.artist} (score: ${highestScore})`);
+                if (showNotif) {
+                    showNotification(`Could not find match for "${spotifyTrack.title}"`, 'error');
+                }
+                return false;
             }
-            
-            return true;
         } catch (error) {
             console.error('Error adding Spotify track to queue:', error);
             if (showNotif) {

@@ -187,19 +187,40 @@ export class Player {
     }
 
     addToQueue(track) {
-        this.queue.push(track);
-        if (this.shuffleActive) {
-            this.shuffledQueue.push(track);
+        // Evitar duplicados: verificar si ya existe en la cola
+        const isDuplicate = this.queue.some(queueTrack => 
+            queueTrack.id === track.id
+        );
+        
+        if (!isDuplicate) {
+            this.queue.push(track);
+            if (this.shuffleActive) {
+                this.shuffledQueue.push(track);
+            }
+            return true; // Se agregó
         }
+        return false; // Ya existe
     }
 
     addMultipleToQueue(tracks) {
         if (Array.isArray(tracks)) {
-            this.queue.push(...tracks);
-            if (this.shuffleActive) {
-                this.shuffledQueue.push(...tracks);
+            const newTracks = tracks.filter(track => 
+                !this.queue.some(queueTrack => queueTrack.id === track.id)
+            );
+            
+            if (newTracks.length > 0) {
+                this.queue.push(...newTracks);
+                if (this.shuffleActive) {
+                    this.shuffledQueue.push(...newTracks);
+                }
             }
+            
+            return {
+                added: newTracks.length,
+                duplicates: tracks.length - newTracks.length
+            };
         }
+        return { added: 0, duplicates: 0 };
     }
 
     clearQueue() {
