@@ -1055,6 +1055,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`[SEARCH] Results: ${results?.items?.length || 0}`);
             }
             
+            // Estrategia 2.5: Remover "The", números y símbolos del artista
+            if (!results?.items || results.items.length === 0) {
+                const cleanArtist = spotifyTrack.artist
+                    .replace(/^The\s+/i, '') // Remover "The" al inicio
+                    .replace(/\d+\.?\d*/g, '') // Remover números
+                    .replace(/[^\w\s]/g, ' ') // Remover símbolos
+                    .trim();
+                
+                if (cleanArtist !== spotifyTrack.artist) {
+                    const query = `${searchTitle} ${cleanArtist}`;
+                    console.log(`[SEARCH] Trying with clean artist: "${query}"`);
+                    results = await api.searchTracks(query);
+                    console.log(`[SEARCH] Results: ${results?.items?.length || 0}`);
+                }
+            }
+            
             // Estrategia 3: Si aún no hay resultados, buscar solo por título limpio
             if (!results?.items || results.items.length === 0) {
                 console.log(`[SEARCH] Trying title only: "${searchTitle}"`);
@@ -1156,8 +1172,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log(`[MATCH] "${spotifyTrack.title}" -> "${bestMatch.title}" by ${bestMatch.artist?.name} (score: ${highestScore})`);
             }
             
-            // Solo agregar si hay match razonable (mínimo 100 puntos = buena coincidencia)
-            if (bestMatch && highestScore >= 100) {
+            // Solo agregar si hay match razonable (mínimo 80 puntos = coincidencia aceptable)
+            if (bestMatch && highestScore >= 80) {
                 const added = player.addToQueue(bestMatch);
                 
                 if (showNotif) {
