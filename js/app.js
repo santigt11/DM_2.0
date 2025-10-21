@@ -1037,17 +1037,24 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const searchTitle = cleanForSearch(spotifyTrack.title);
             
+            console.log(`\n[SPOTIFY] "${spotifyTrack.title}" - ${spotifyTrack.artist}`);
+            console.log(`  Cleaned: "${searchTitle}"`);
+            
             let results = null;
             
             // Estrategia 1: Buscar por ISRC (más preciso)
             if (spotifyTrack.isrc) {
+                console.log(`  Strategy 1: ISRC search (${spotifyTrack.isrc})`);
                 results = await api.searchTracks(spotifyTrack.isrc);
+                console.log(`    → ${results?.items?.length || 0} results`);
             }
             
             // Estrategia 2: Si no hay resultados, buscar por título limpio + artista
             if (!results?.items || results.items.length === 0) {
                 const query = `${searchTitle} ${spotifyTrack.artist}`;
+                console.log(`  Strategy 2: Title + Artist ("${query}")`);
                 results = await api.searchTracks(query);
+                console.log(`    → ${results?.items?.length || 0} results`);
             }
             
             // Estrategia 2.5: Remover "The", números y símbolos del artista
@@ -1060,17 +1067,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (cleanArtist !== spotifyTrack.artist) {
                     const query = `${searchTitle} ${cleanArtist}`;
+                    console.log(`  Strategy 3: Clean Artist ("${query}")`);
                     results = await api.searchTracks(query);
+                    console.log(`    → ${results?.items?.length || 0} results`);
                 }
             }
             
-            // Estrategia 3: Si aún no hay resultados, buscar solo por título limpio
+            // Estrategia 4: Si aún no hay resultados, buscar solo por título limpio
             if (!results?.items || results.items.length === 0) {
+                console.log(`  Strategy 4: Title only ("${searchTitle}")`);
                 results = await api.searchTracks(searchTitle);
+                console.log(`    → ${results?.items?.length || 0} results`);
             }
             
             if (!results?.items || results.items.length === 0) {
-                console.warn(`No match found for: ${spotifyTrack.title} - ${spotifyTrack.artist}`);
+                console.warn(`  ✗ NO RESULTS FOUND IN TIDAL`);
                 if (showNotif) {
                     showNotification(`No match: "${spotifyTrack.title}"`, 'error');
                 }
@@ -1094,7 +1105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const spotifyTitle = cleanAndNormalize(spotifyTrack.title);
             const spotifyArtist = cleanAndNormalize(spotifyTrack.artist);
             
-            console.log(`[SEARCH] Looking for: "${spotifyTitle}" by ${spotifyArtist}`);
+            console.log(`  Matching: "${spotifyTitle}" by "${spotifyArtist}"`);
             
             let bestMatch = null;
             let bestScore = 0;
@@ -1126,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     continue; // Si el artista no coincide nada, saltar
                 }
                 
-                console.log(`  [TEST] "${item.title}" by ${item.artist?.name} - Score: ${score}`);
+                console.log(`    [${score}] "${item.title}" by ${item.artist?.name}`);
                 
                 // Guardar si es mejor que el anterior
                 if (score > bestScore) {
@@ -1136,7 +1147,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (bestMatch) {
-                console.log(`  ✓ BEST MATCH: "${bestMatch.title}" by ${bestMatch.artist?.name} (score: ${bestScore})`);
+                console.log(`  ✓ BEST: "${bestMatch.title}" by ${bestMatch.artist?.name} (score: ${bestScore})`);
+            } else {
+                console.warn(`  ✗ NO GOOD MATCH (none passed title+artist criteria)`);
             }
             
             if (bestMatch) {
