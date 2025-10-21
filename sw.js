@@ -1,5 +1,5 @@
 //sw.js
-const CACHE_NAME = 'monochrome-v1';
+const CACHE_NAME = 'monochrome-v2';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -14,20 +14,50 @@ const urlsToCache = [
     '/manifest.json'
 ];
 
+// Skip waiting para activar el nuevo SW inmediatamente
 self.addEventListener('install', event => {
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(urlsToCache))
     );
 });
 
+// Network First: Intenta red primero, luego caché
 self.addEventListener('fetch', event => {
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => response || fetch(event.request))
-    );
+    const url = new URL(event.request.url);
+    
+    // Network First para HTML, CSS y JS
+    if (url.pathname.endsWith('.html') || 
+        url.pathname.endsWith('.css') || 
+        url.pathname.endsWith('.js') || 
+        url.pathname === '/') {
+        
+        event.respondWith(
+            fetch(event.request)
+                .then(response => {
+                    // Guardar en caché la nueva versión
+                    const responseClone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseClone);
+                    });
+                    return response;
+                })
+                .catch(() => {
+                    // Si falla la red, usar caché
+                    return caches.match(event.request);
+                })
+        );
+    } else {
+        // Cache First para imágenes y otros recursos
+        event.respondWith(
+            caches.match(event.request)
+                .then(response => response || fetch(event.request))
+        );
+    }
 });
 
+// Tomar control inmediatamente
 self.addEventListener('activate', event => {
     const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
@@ -39,6 +69,6 @@ self.addEventListener('activate', event => {
                     }
                 })
             );
-        })
+        }).then(() => self.clients.claim())
     );
 });
