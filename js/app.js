@@ -1077,101 +1077,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 return false;
             }
 
-            // Función para normalizar texto (remover acentos, símbolos, etc.)
-            const normalize = (str) => str.toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remover acentos
-                .replace(/[^\w\s]/g, ' ') // Convertir símbolos a espacios
-                .replace(/\s+/g, ' ') // Múltiples espacios a uno solo
-                .trim();
-            
-            // Función para limpiar título de Spotify (remover partes entre paréntesis, feat, etc.)
-            const cleanTitle = (title) => {
-                return title
-                    .replace(/\([^)]*\)/g, '') // Remover todo entre paréntesis
-                    .replace(/\[[^\]]*\]/g, '') // Remover todo entre corchetes
-                    .replace(/\s*[-–—]\s*.+$/, '') // Remover " - artista" o " - detalles" al final
+            // SISTEMA SIMPLE: Limpiar, normalizar y comparar
+            const cleanAndNormalize = (str) => {
+                return str
+                    .toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remover acentos
+                    .replace(/\([^)]*\)/g, '') // Remover paréntesis
+                    .replace(/\[[^\]]*\]/g, '') // Remover corchetes
+                    .replace(/\s*[-–—|]\s*.+$/, '') // Remover " - algo" al final
                     .replace(/\s*(feat|ft|featuring|with|vs|x)\s*.+$/i, '') // Remover colaboradores
+                    .replace(/[^\w\s]/g, '') // Remover símbolos
+                    .replace(/\s+/g, ' ') // Múltiples espacios → uno
                     .trim();
             };
             
-            // Buscar el mejor match validando título Y artista
-            const spotifyTitleClean = cleanTitle(spotifyTrack.title);
-            const spotifyTitleNorm = normalize(spotifyTitleClean);
-            const spotifyArtistNorm = normalize(spotifyTrack.artist);
+            const spotifyTitle = cleanAndNormalize(spotifyTrack.title);
+            const spotifyArtist = cleanAndNormalize(spotifyTrack.artist);
             
-            // Extraer palabras clave del título (remover palabras comunes)
-            const getTitleWords = (title) => {
-                return title.split(' ')
-                    .filter(word => word.length > 2) // Palabras de al menos 3 caracteres
-                    .filter(word => !['the', 'and', 'for', 'with', 'remix', 'version', 'edit'].includes(word));
-            };
-            
-            const spotifyTitleWords = getTitleWords(spotifyTitleNorm);
+            console.log(`[SEARCH] Looking for: "${spotifyTitle}" by ${spotifyArtist}`);
             
             let bestMatch = null;
-            let highestScore = 0;
             
             for (const item of results.items) {
-                const tidalTitleClean = cleanTitle(item.title);
-                const tidalTitleNorm = normalize(tidalTitleClean);
-                const tidalArtistNorm = normalize(item.artist?.name || '');
+                const tidalTitle = cleanAndNormalize(item.title);
+                const tidalArtist = cleanAndNormalize(item.artist?.name || '');
                 
-                const tidalTitleWords = getTitleWords(tidalTitleNorm);
+                // ¿Títulos coinciden?
+                const titleMatch = tidalTitle === spotifyTitle || 
+                                  tidalTitle.includes(spotifyTitle) || 
+                                  spotifyTitle.includes(tidalTitle);
                 
-            // Calcular score de similitud (más estricto)
-            let score = 0;
-            let titleScore = 0;
-            let artistScore = 0;
-            
-            // Match de título
-            if (tidalTitleNorm === spotifyTitleNorm) {
-                titleScore = 100; // Match exacto
-            } else if (tidalTitleNorm.includes(spotifyTitleNorm) || spotifyTitleNorm.includes(tidalTitleNorm)) {
-                titleScore = 80; // Uno contiene al otro
-            } else {
-                // Comparar por palabras clave
-                const commonWords = spotifyTitleWords.filter(word => tidalTitleWords.includes(word));
-                const wordMatchRatio = commonWords.length / Math.max(spotifyTitleWords.length, tidalTitleWords.length);
-                if (wordMatchRatio > 0.6) { // Al menos 60% de palabras coinciden
-                    titleScore = Math.round(50 * wordMatchRatio);
+                // ¿Artista coincide al menos parcialmente?
+                const artistMatch = tidalArtist.includes(spotifyArtist) || 
+                                   spotifyArtist.includes(tidalArtist) ||
+                                   // Comparar primera palabra del artista (útil para "The Weeknd" vs "Weeknd")
+                                   spotifyArtist.split(' ')[0] === tidalArtist.split(' ')[0];
+                
+                console.log(`  [TEST] "${item.title}" by ${item.artist?.name}`);
+                console.log(`    Title match: ${titleMatch} | Artist match: ${artistMatch}`);
+                
+                // SI el título coincide Y el artista coincide → ¡LO ENCONTRAMOS!
+                if (titleMatch && artistMatch) {
+                    bestMatch = item;
+                    console.log(`    ✓ MATCH FOUND!`);
+                    break; // Salir del loop, ya lo encontramos
                 }
             }
             
-            // Match de artista
-            if (tidalArtistNorm === spotifyArtistNorm) {
-                artistScore = 100; // Match exacto
-            } else if (tidalArtistNorm.includes(spotifyArtistNorm) || spotifyArtistNorm.includes(tidalArtistNorm)) {
-                artistScore = 70; // Uno contiene al otro
-            } else {
-                // Comparar nombres de artistas palabra por palabra
-                const spotifyArtistWords = spotifyArtistNorm.split(' ');
-                const tidalArtistWords = tidalArtistNorm.split(' ');
-                const artistCommonWords = spotifyArtistWords.filter(word => 
-                    tidalArtistWords.some(tw => tw.includes(word) || word.includes(tw))
-                );
-                if (artistCommonWords.length > 0) {
-                    artistScore = 30; // Match parcial de artista (reducido)
-                }
-            }
-            
-            // REQUERIR un buen match en AMBOS (título y artista)
-            // Si el artista no coincide bien, no agregar aunque el título sea similar
-            score = titleScore + artistScore;
-            
-            // Log detallado para debugging
-            console.log(`[MATCH] "${item.title}" by ${item.artist?.name}`);
-            console.log(`  Title: ${titleScore} | Artist: ${artistScore} | Total: ${score}`);
-            
-            if (score > highestScore) {
-                highestScore = score;
-                bestMatch = item;
-            }
-        }
-            
-            // Solo agregar si hay match BUENO (mínimo 120 puntos = título + artista coinciden bien)
-            console.log(`[BEST MATCH] Score: ${highestScore} | Threshold: 120`);
-            if (bestMatch && highestScore >= 120) {
-                console.log(`✓ Adding: "${bestMatch.title}" by ${bestMatch.artist?.name}`);
+            if (bestMatch) {
                 const added = player.addToQueue(bestMatch);
                 
                 if (showNotif) {
@@ -1184,9 +1137,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 return true;
             } else {
-                console.warn(`[SPOTIFY] No good match found for "${spotifyTrack.title}" by ${spotifyTrack.artist} (score: ${highestScore})`);
+                console.warn(`[SPOTIFY] No match found for "${spotifyTrack.title}" by ${spotifyTrack.artist}`);
                 if (showNotif) {
-                    showNotification(`Could not find match for "${spotifyTrack.title}"`, 'error');
+                    showNotification(`No match: "${spotifyTrack.title}"`, 'error');
                 }
                 return false;
             }
