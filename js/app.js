@@ -1037,22 +1037,17 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const searchTitle = cleanForSearch(spotifyTrack.title);
             
-            console.log(`[SEARCH] Spotify: "${spotifyTrack.title}" -> Clean: "${searchTitle}"`);
-            
             let results = null;
             
             // Estrategia 1: Buscar por ISRC (más preciso)
             if (spotifyTrack.isrc) {
-                console.log(`[SEARCH] Trying ISRC: ${spotifyTrack.isrc}`);
                 results = await api.searchTracks(spotifyTrack.isrc);
             }
             
             // Estrategia 2: Si no hay resultados, buscar por título limpio + artista
             if (!results?.items || results.items.length === 0) {
                 const query = `${searchTitle} ${spotifyTrack.artist}`;
-                console.log(`[SEARCH] Trying title+artist: "${query}"`);
                 results = await api.searchTracks(query);
-                console.log(`[SEARCH] Results: ${results?.items?.length || 0}`);
             }
             
             // Estrategia 2.5: Remover "The", números y símbolos del artista
@@ -1065,17 +1060,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (cleanArtist !== spotifyTrack.artist) {
                     const query = `${searchTitle} ${cleanArtist}`;
-                    console.log(`[SEARCH] Trying with clean artist: "${query}"`);
                     results = await api.searchTracks(query);
-                    console.log(`[SEARCH] Results: ${results?.items?.length || 0}`);
                 }
             }
             
             // Estrategia 3: Si aún no hay resultados, buscar solo por título limpio
             if (!results?.items || results.items.length === 0) {
-                console.log(`[SEARCH] Trying title only: "${searchTitle}"`);
                 results = await api.searchTracks(searchTitle);
-                console.log(`[SEARCH] Results: ${results?.items?.length || 0}`);
             }
             
             if (!results?.items || results.items.length === 0) {
@@ -1127,53 +1118,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const tidalTitleWords = getTitleWords(tidalTitleNorm);
                 
-                // Calcular score de similitud
-                let score = 0;
-                
-                // Match de título
-                if (tidalTitleNorm === spotifyTitleNorm) {
-                    score += 100; // Match exacto
-                } else if (tidalTitleNorm.includes(spotifyTitleNorm) || spotifyTitleNorm.includes(tidalTitleNorm)) {
-                    score += 80; // Uno contiene al otro
-                } else {
-                    // Comparar por palabras clave
-                    const commonWords = spotifyTitleWords.filter(word => tidalTitleWords.includes(word));
-                    const wordMatchRatio = commonWords.length / Math.max(spotifyTitleWords.length, tidalTitleWords.length);
-                    if (wordMatchRatio > 0.5) { // Al menos 50% de palabras coinciden
-                        score += Math.round(60 * wordMatchRatio);
-                    }
-                }
-                
-                // Match de artista
-                if (tidalArtistNorm === spotifyArtistNorm) {
-                    score += 100; // Match exacto
-                } else if (tidalArtistNorm.includes(spotifyArtistNorm) || spotifyArtistNorm.includes(tidalArtistNorm)) {
-                    score += 70; // Uno contiene al otro
-                } else {
-                    // Comparar nombres de artistas palabra por palabra
-                    const spotifyArtistWords = spotifyArtistNorm.split(' ');
-                    const tidalArtistWords = tidalArtistNorm.split(' ');
-                    const artistCommonWords = spotifyArtistWords.filter(word => 
-                        tidalArtistWords.some(tw => tw.includes(word) || word.includes(tw))
-                    );
-                    if (artistCommonWords.length > 0) {
-                        score += 40; // Match parcial de artista
-                    }
-                }
-                
-                if (score > highestScore) {
-                    highestScore = score;
-                    bestMatch = item;
+            // Calcular score de similitud (más estricto)
+            let score = 0;
+            let titleScore = 0;
+            let artistScore = 0;
+            
+            // Match de título
+            if (tidalTitleNorm === spotifyTitleNorm) {
+                titleScore = 100; // Match exacto
+            } else if (tidalTitleNorm.includes(spotifyTitleNorm) || spotifyTitleNorm.includes(tidalTitleNorm)) {
+                titleScore = 80; // Uno contiene al otro
+            } else {
+                // Comparar por palabras clave
+                const commonWords = spotifyTitleWords.filter(word => tidalTitleWords.includes(word));
+                const wordMatchRatio = commonWords.length / Math.max(spotifyTitleWords.length, tidalTitleWords.length);
+                if (wordMatchRatio > 0.6) { // Al menos 60% de palabras coinciden
+                    titleScore = Math.round(50 * wordMatchRatio);
                 }
             }
             
-            // Log para debug
-            if (bestMatch) {
-                console.log(`[MATCH] "${spotifyTrack.title}" -> "${bestMatch.title}" by ${bestMatch.artist?.name} (score: ${highestScore})`);
+            // Match de artista
+            if (tidalArtistNorm === spotifyArtistNorm) {
+                artistScore = 100; // Match exacto
+            } else if (tidalArtistNorm.includes(spotifyArtistNorm) || spotifyArtistNorm.includes(tidalArtistNorm)) {
+                artistScore = 70; // Uno contiene al otro
+            } else {
+                // Comparar nombres de artistas palabra por palabra
+                const spotifyArtistWords = spotifyArtistNorm.split(' ');
+                const tidalArtistWords = tidalArtistNorm.split(' ');
+                const artistCommonWords = spotifyArtistWords.filter(word => 
+                    tidalArtistWords.some(tw => tw.includes(word) || word.includes(tw))
+                );
+                if (artistCommonWords.length > 0) {
+                    artistScore = 30; // Match parcial de artista (reducido)
+                }
             }
             
-            // Solo agregar si hay match razonable (mínimo 80 puntos = coincidencia aceptable)
-            if (bestMatch && highestScore >= 80) {
+            // REQUERIR un buen match en AMBOS (título y artista)
+            // Si el artista no coincide bien, no agregar aunque el título sea similar
+            score = titleScore + artistScore;
+            
+            // Log detallado para debugging
+            console.log(`[MATCH] "${item.title}" by ${item.artist?.name}`);
+            console.log(`  Title: ${titleScore} | Artist: ${artistScore} | Total: ${score}`);
+            
+            if (score > highestScore) {
+                highestScore = score;
+                bestMatch = item;
+            }
+        }
+            
+            // Solo agregar si hay match BUENO (mínimo 120 puntos = título + artista coinciden bien)
+            console.log(`[BEST MATCH] Score: ${highestScore} | Threshold: 120`);
+            if (bestMatch && highestScore >= 120) {
+                console.log(`✓ Adding: "${bestMatch.title}" by ${bestMatch.artist?.name}`);
                 const added = player.addToQueue(bestMatch);
                 
                 if (showNotif) {
