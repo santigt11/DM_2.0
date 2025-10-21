@@ -1097,31 +1097,46 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`[SEARCH] Looking for: "${spotifyTitle}" by ${spotifyArtist}`);
             
             let bestMatch = null;
+            let bestScore = 0;
             
             for (const item of results.items) {
                 const tidalTitle = cleanAndNormalize(item.title);
                 const tidalArtist = cleanAndNormalize(item.artist?.name || '');
                 
-                // ¿Títulos coinciden?
-                const titleMatch = tidalTitle === spotifyTitle || 
-                                  tidalTitle.includes(spotifyTitle) || 
-                                  spotifyTitle.includes(tidalTitle);
+                // Calcular score para priorizar mejores matches
+                let score = 0;
                 
-                // ¿Artista coincide al menos parcialmente?
-                const artistMatch = tidalArtist.includes(spotifyArtist) || 
-                                   spotifyArtist.includes(tidalArtist) ||
-                                   // Comparar primera palabra del artista (útil para "The Weeknd" vs "Weeknd")
-                                   spotifyArtist.split(' ')[0] === tidalArtist.split(' ')[0];
-                
-                console.log(`  [TEST] "${item.title}" by ${item.artist?.name}`);
-                console.log(`    Title match: ${titleMatch} | Artist match: ${artistMatch}`);
-                
-                // SI el título coincide Y el artista coincide → ¡LO ENCONTRAMOS!
-                if (titleMatch && artistMatch) {
-                    bestMatch = item;
-                    console.log(`    ✓ MATCH FOUND!`);
-                    break; // Salir del loop, ya lo encontramos
+                // Score de título (0-100)
+                if (tidalTitle === spotifyTitle) {
+                    score += 100; // Match exacto = máxima prioridad
+                } else if (tidalTitle.includes(spotifyTitle) || spotifyTitle.includes(tidalTitle)) {
+                    score += 50; // Match parcial
+                } else {
+                    continue; // Si el título no coincide, saltar este resultado
                 }
+                
+                // Score de artista (0-100)
+                if (tidalArtist === spotifyArtist) {
+                    score += 100; // Match exacto de artista
+                } else if (tidalArtist.includes(spotifyArtist) || spotifyArtist.includes(tidalArtist)) {
+                    score += 70; // Match parcial de artista
+                } else if (spotifyArtist.split(' ')[0] === tidalArtist.split(' ')[0]) {
+                    score += 40; // Al menos primera palabra coincide
+                } else {
+                    continue; // Si el artista no coincide nada, saltar
+                }
+                
+                console.log(`  [TEST] "${item.title}" by ${item.artist?.name} - Score: ${score}`);
+                
+                // Guardar si es mejor que el anterior
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = item;
+                }
+            }
+            
+            if (bestMatch) {
+                console.log(`  ✓ BEST MATCH: "${bestMatch.title}" by ${bestMatch.artist?.name} (score: ${bestScore})`);
             }
             
             if (bestMatch) {
