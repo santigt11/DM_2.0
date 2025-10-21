@@ -1036,58 +1036,37 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             
             const searchTitle = cleanForSearch(spotifyTrack.title);
-            
-            // ID único para seguir el rastro en logs paralelos
-            const searchId = `[${spotifyTrack.title.substring(0, 20)}...]`;
-            
-            console.log(`\n${'='.repeat(80)}`);
-            console.log(`${searchId} START`);
-            console.log(`  Original: "${spotifyTrack.title}" - ${spotifyTrack.artist}`);
-            console.log(`  Cleaned: "${searchTitle}"`);
-            
             let results = null;
             
             // Estrategia 1: Buscar por ISRC (más preciso)
             if (spotifyTrack.isrc) {
-                console.log(`${searchId} Strategy 1: ISRC (${spotifyTrack.isrc})`);
                 results = await api.searchTracks(spotifyTrack.isrc);
-                console.log(`${searchId}   → ${results?.items?.length || 0} results`);
             }
             
             // Estrategia 2: Si no hay resultados, buscar por título limpio + artista
             if (!results?.items || results.items.length === 0) {
-                const query = `${searchTitle} ${spotifyTrack.artist}`;
-                console.log(`${searchId} Strategy 2: Title + Artist`);
-                results = await api.searchTracks(query);
-                console.log(`${searchId}   → ${results?.items?.length || 0} results`);
+                results = await api.searchTracks(`${searchTitle} ${spotifyTrack.artist}`);
             }
             
-            // Estrategia 2.5: Remover "The", números y símbolos del artista
+            // Estrategia 3: Remover "The", números y símbolos del artista
             if (!results?.items || results.items.length === 0) {
                 const cleanArtist = spotifyTrack.artist
-                    .replace(/^The\s+/i, '') // Remover "The" al inicio
-                    .replace(/\d+\.?\d*/g, '') // Remover números
-                    .replace(/[^\w\s]/g, ' ') // Remover símbolos
+                    .replace(/^The\s+/i, '')
+                    .replace(/\d+\.?\d*/g, '')
+                    .replace(/[^\w\s]/g, ' ')
                     .trim();
                 
                 if (cleanArtist !== spotifyTrack.artist) {
-                    const query = `${searchTitle} ${cleanArtist}`;
-                    console.log(`${searchId} Strategy 3: Clean Artist`);
-                    results = await api.searchTracks(query);
-                    console.log(`${searchId}   → ${results?.items?.length || 0} results`);
+                    results = await api.searchTracks(`${searchTitle} ${cleanArtist}`);
                 }
             }
             
             // Estrategia 4: Si aún no hay resultados, buscar solo por título limpio
             if (!results?.items || results.items.length === 0) {
-                console.log(`${searchId} Strategy 4: Title only`);
                 results = await api.searchTracks(searchTitle);
-                console.log(`${searchId}   → ${results?.items?.length || 0} results`);
             }
             
             if (!results?.items || results.items.length === 0) {
-                console.warn(`${searchId} ✗ NO RESULTS IN TIDAL`);
-                console.log(`${'='.repeat(80)}\n`);
                 if (showNotif) {
                     showNotification(`No match: "${spotifyTrack.title}"`, 'error');
                 }
@@ -1111,8 +1090,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const spotifyTitle = cleanAndNormalize(spotifyTrack.title);
             const spotifyArtist = cleanAndNormalize(spotifyTrack.artist);
             
-            console.log(`${searchId} Matching...`);
-            
             let bestMatch = null;
             let bestScore = 0;
             
@@ -1120,44 +1097,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tidalTitle = cleanAndNormalize(item.title);
                 const tidalArtist = cleanAndNormalize(item.artist?.name || '');
                 
-                // Calcular score para priorizar mejores matches
                 let score = 0;
                 
                 // Score de título (0-100)
                 if (tidalTitle === spotifyTitle) {
-                    score += 100; // Match exacto = máxima prioridad
+                    score += 100;
                 } else if (tidalTitle.includes(spotifyTitle) || spotifyTitle.includes(tidalTitle)) {
-                    score += 50; // Match parcial
+                    score += 50;
                 } else {
-                    continue; // Si el título no coincide, saltar este resultado
+                    continue;
                 }
                 
                 // Score de artista (0-100)
                 if (tidalArtist === spotifyArtist) {
-                    score += 100; // Match exacto de artista
+                    score += 100;
                 } else if (tidalArtist.includes(spotifyArtist) || spotifyArtist.includes(tidalArtist)) {
-                    score += 70; // Match parcial de artista
+                    score += 70;
                 } else if (spotifyArtist.split(' ')[0] === tidalArtist.split(' ')[0]) {
-                    score += 40; // Al menos primera palabra coincide
+                    score += 40;
                 } else {
-                    continue; // Si el artista no coincide nada, saltar
+                    continue;
                 }
                 
-                console.log(`${searchId}   [${score}] "${item.title}" by ${item.artist?.name}`);
-                
-                // Guardar si es mejor que el anterior
                 if (score > bestScore) {
                     bestScore = score;
                     bestMatch = item;
                 }
-            }
-            
-            if (bestMatch) {
-                console.log(`${searchId} ✓ MATCH: "${bestMatch.title}" (score: ${bestScore})`);
-                console.log(`${'='.repeat(80)}\n`);
-            } else {
-                console.warn(`${searchId} ✗ NO MATCH (title or artist criteria not met)`);
-                console.log(`${'='.repeat(80)}\n`);
             }
             
             if (bestMatch) {
@@ -1173,7 +1138,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 return true;
             } else {
-                console.warn(`[SPOTIFY] No match found for "${spotifyTrack.title}" by ${spotifyTrack.artist}`);
                 if (showNotif) {
                     showNotification(`No match: "${spotifyTrack.title}"`, 'error');
                 }
