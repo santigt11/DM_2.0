@@ -529,32 +529,6 @@ a {
     border-color: var(--foreground);
 }
 
-/* Playlist Loader Section */
-.playlist-loader-section {
-    margin-bottom: var(--spacing-2xl);
-    padding: var(--spacing-xl);
-    background: linear-gradient(135deg, var(--card) 0%, #1a1a1a 100%);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.playlist-loader-section .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem 2rem;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.playlist-loader-section .btn-primary svg {
-    width: 20px;
-    height: 20px;
-}
-
 .settings-list {
     max-width: 800px;
 }
@@ -1393,7 +1367,7 @@ input:checked + .slider:before {
     }
     
     .card-grid {
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
         gap: var(--spacing-md);
     }
     
@@ -1545,35 +1519,40 @@ input:checked + .slider:before {
     }
     
     .card-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-sm);
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: var(--spacing-xs) !important;
     }
     
     .card {
-        padding: var(--spacing-sm);
+        padding: var(--spacing-xxs);
+    }
+    
+    .card-image-wrapper {
+        margin-bottom: var(--spacing-xxs);
     }
     
     .card-title {
-        font-size: 0.875rem;
-        line-height: 1.3;
+        font-size: 0.75rem;
+        line-height: 1.2;
+        margin-top: var(--spacing-xxs);
     }
     
     .card-subtitle {
-        font-size: 0.75rem;
+        font-size: 0.65rem;
     }
     
     .detail-header {
         flex-direction: column;
         align-items: center;
         text-align: center;
-        gap: var(--spacing-lg);
-        padding: var(--spacing-lg) var(--spacing-md);
-        margin-bottom: var(--spacing-lg);
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        margin-bottom: var(--spacing-sm);
     }
     
     .detail-header-image {
-        width: 200px;
-        height: 200px;
+        width: 140px;
+        height: 140px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
     }
     
@@ -1582,13 +1561,13 @@ input:checked + .slider:before {
     }
     
     .detail-header-info .title {
-        font-size: 1.75rem;
+        font-size: 1.5rem;
         line-height: 1.2;
-        margin-bottom: var(--spacing-sm);
+        margin-bottom: var(--spacing-xs);
     }
     
     .detail-header-info .artist {
-        font-size: 1rem;
+        font-size: 0.875rem;
     }
     
     .detail-header-actions {
@@ -1768,12 +1747,12 @@ input:checked + .slider:before {
     }
     
     .card-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-xs);
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: var(--spacing-xs) !important;
     }
     
     .card {
-        padding: var(--spacing-xs);
+        padding: var(--spacing-xxs);
     }
     
     .card-image {
@@ -1781,12 +1760,12 @@ input:checked + .slider:before {
     }
     
     .card-title {
-        font-size: 0.8rem;
-        margin-top: var(--spacing-xs);
+        font-size: 0.75rem;
+        margin-top: var(--spacing-xxs);
     }
     
     .card-subtitle {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
     }
     
     .section-title {
