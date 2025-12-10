@@ -9,82 +9,131 @@ export class LosslessAPI {
             maxSize: 200,
             ttl: 1000 * 60 * 30
         });
-        
+
         setInterval(() => {
             this.cache.clearExpired();
         }, 1000 * 60 * 5);
     }
 
-async fetchWithRetry(relativePath, options = {}) {
-    const instances = this.settings.getInstances();
-    if (instances.length === 0) {
-        throw new Error("No API instances configured.");
-    }
+    async fetchWithRetry(relativePath, options = {}) {
+        const instances = this.settings.getInstances();
+        if (instances.length === 0) {
+            throw new Error("No API instances configured.");
+        }
 
-    const maxRetries = 1;
-    let lastError = null;
+        const TIMEOUT_MS = options.timeout || 10000; // 10 segundos por defecto
+        const maxAttemptsPerInstance = 2;
+        let lastError = null;
+        let attemptCount = 0;
+        const maxTotalAttempts = instances.length * maxAttemptsPerInstance;
 
-    for (const baseUrl of instances) {
-        const url = baseUrl.endsWith('/') 
-            ? `${baseUrl}${relativePath.substring(1)}` 
-            : `${baseUrl}${relativePath}`;
+        // Intentar con cada instancia
+        for (let instanceIndex = 0; instanceIndex < instances.length; instanceIndex++) {
+            const baseUrl = instances[instanceIndex];
+            const url = baseUrl.endsWith('/')
+                ? `${baseUrl}${relativePath.substring(1)}`
+                : `${baseUrl}${relativePath}`;
 
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                const response = await fetch(url, { signal: options.signal });
+            // Intentar varias veces con la misma instancia
+            for (let attempt = 1; attempt <= maxAttemptsPerInstance; attempt++) {
+                attemptCount++;
 
-                if (response.status === 429) {
-                    throw new Error(RATE_LIMIT_ERROR_MESSAGE);
-                }
+                // Crear un AbortController para el timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-                if (response.ok) {
-                    return response;
-                }
+                try {
+                    console.log(`[API] Attempt ${attemptCount}/${maxTotalAttempts}: ${baseUrl} (${relativePath})`);
 
-                if (response.status === 401) {
-                    let errorData;
-                    try {
-                        errorData = await response.clone().json();
-                    } catch {}
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal,
+                        cache: 'no-store', // Evitar caché del navegador
+                        mode: 'cors' // Explícitamente usar CORS
+                    });
 
-                    if (errorData?.subStatus === 11002) {
-                        lastError = new Error(errorData?.userMessage || 'Authentication failed');
-                        if (attempt < maxRetries) {
-                            await delay(200);
-                            continue;
+                    clearTimeout(timeoutId);
+
+                    // Rate limiting
+                    if (response.status === 429) {
+                        console.warn(`[API] Rate limited on ${baseUrl}`);
+                        lastError = new Error(RATE_LIMIT_ERROR_MESSAGE);
+                        break; // Saltar a la siguiente instancia
+                    }
+
+                    // Respuesta exitosa
+                    if (response.ok) {
+                        console.log(`[API] ✓ Success with ${baseUrl}`);
+                        return response;
+                    }
+
+                    // Error de autenticación
+                    if (response.status === 401) {
+                        let errorData;
+                        try {
+                            errorData = await response.clone().json();
+                        } catch { }
+
+                        if (errorData?.subStatus === 11002) {
+                            lastError = new Error(errorData?.userMessage || 'Authentication failed');
+                            if (attempt < maxAttemptsPerInstance) {
+                                await delay(300);
+                                continue;
+                            }
                         }
                     }
-                }
 
-                if (response.status >= 500 && attempt < maxRetries) {
-                    await delay(200);
-                    continue;
-                }
+                    // Error del servidor - reintentar
+                    if (response.status >= 500) {
+                        console.warn(`[API] Server error ${response.status} on ${baseUrl}`);
+                        lastError = new Error(`Server error: ${response.status}`);
+                        if (attempt < maxAttemptsPerInstance) {
+                            await delay(500);
+                            continue;
+                        }
+                        break; // Saltar a la siguiente instancia
+                    }
 
-                lastError = new Error(`Request failed with status ${response.status}`);
-                break;
+                    // Otros errores
+                    lastError = new Error(`Request failed with status ${response.status}`);
+                    break; // Saltar a la siguiente instancia
 
-            } catch (error) {
-                if (error.name === 'AbortError') {
-                    throw error;
-                }
-                
-                lastError = error;
-                console.log(`Failed for ${baseUrl}: ${error.message}`);
-                
-                if (attempt < maxRetries) {
-                    await delay(200);
+                } catch (error) {
+                    clearTimeout(timeoutId);
+
+                    // Error de timeout
+                    if (error.name === 'AbortError') {
+                        console.warn(`[API] Timeout on ${baseUrl}`);
+                        lastError = new Error(`Request timeout (${TIMEOUT_MS}ms)`);
+                        break; // Saltar a la siguiente instancia
+                    }
+
+                    // Error de red (CORS, NetworkError, etc.)
+                    if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+                        console.warn(`[API] Network error on ${baseUrl}: ${error.message}`);
+                        lastError = new Error(`Network error: ${error.message}`);
+                        break; // Saltar a la siguiente instancia inmediatamente
+                    }
+
+                    lastError = error;
+                    console.warn(`[API] Error on ${baseUrl}: ${error.message}`);
+
+                    // Pequeño delay antes de reintentar
+                    if (attempt < maxAttemptsPerInstance) {
+                        await delay(300);
+                    }
                 }
             }
         }
-    }
 
-    throw lastError || new Error(`All API instances failed for: ${relativePath}`);
-}
+        // Si llegamos aquí, todas las instancias fallaron
+        console.error(`[API] All instances failed for: ${relativePath}`);
+        throw lastError || new Error(`All API instances failed for: ${relativePath}`);
+    }
 
     findSearchSection(source, key, visited) {
         if (!source || typeof source !== 'object') return;
-        
+
         if (Array.isArray(source)) {
             for (const e of source) {
                 const f = this.findSearchSection(e, key, visited);
@@ -92,17 +141,17 @@ async fetchWithRetry(relativePath, options = {}) {
             }
             return;
         }
-        
+
         if (visited.has(source)) return;
         visited.add(source);
-        
+
         if ('items' in source && Array.isArray(source.items)) return source;
-        
+
         if (key in source) {
             const f = this.findSearchSection(source[key], key, visited);
             if (f) return f;
         }
-        
+
         for (const v of Object.values(source)) {
             const f = this.findSearchSection(v, key, visited);
             if (f) return f;
@@ -124,24 +173,24 @@ async fetchWithRetry(relativePath, options = {}) {
         return this.buildSearchResponse(section);
     }
 
-prepareTrack(track) {
-    let normalized = track;
-    
-    if (!track.artist && Array.isArray(track.artists) && track.artists.length > 0) {
-        normalized = { ...track, artist: track.artists[0] };
-    }
+    prepareTrack(track) {
+        let normalized = track;
 
-    if (normalized.album && !normalized.album.cover && normalized.album.id) {
-        console.warn('Track missing album cover, attempting to use album ID');
-    }
+        if (!track.artist && Array.isArray(track.artists) && track.artists.length > 0) {
+            normalized = { ...track, artist: track.artists[0] };
+        }
 
-    const derivedQuality = deriveTrackQuality(normalized);
-    if (derivedQuality && normalized.audioQuality !== derivedQuality) {
-        normalized = { ...normalized, audioQuality: derivedQuality };
-    }
+        if (normalized.album && !normalized.album.cover && normalized.album.id) {
+            console.warn('Track missing album cover, attempting to use album ID');
+        }
 
-    return normalized;
-}
+        const derivedQuality = deriveTrackQuality(normalized);
+        if (derivedQuality && normalized.audioQuality !== derivedQuality) {
+            normalized = { ...normalized, audioQuality: derivedQuality };
+        }
+
+        return normalized;
+    }
 
     prepareAlbum(album) {
         if (!album.artist && Array.isArray(album.artists) && album.artists.length > 0) {
@@ -158,22 +207,40 @@ prepareTrack(track) {
     }
 
     parseTrackLookup(data) {
-        const entries = Array.isArray(data) ? data : [data];
+        // Normalizar a array
+        let entries = [];
+        if (data.data) {
+            entries = [data.data];
+        } else if (Array.isArray(data)) {
+            entries = data;
+        } else {
+            entries = [data];
+        }
+
         let track, info, originalTrackUrl;
 
+        // Buscar en los entries
         for (const entry of entries) {
             if (!entry || typeof entry !== 'object') continue;
-            
-            if (!track && 'duration' in entry) {
+
+            // Caso 1: Todo en un solo objeto (formato nuevo)
+            if (entry.id && (entry.duration || entry.manifest || entry.OriginalTrackUrl || entry.originalTrackUrl || entry.url)) {
+                // Este objeto tiene tanto info de track como de stream
                 track = entry;
-                continue;
+                info = entry;
+                originalTrackUrl = entry.OriginalTrackUrl || entry.originalTrackUrl || entry.url;
+                break; // Ya tenemos todo
             }
-            
+
+            // Caso 2: Objetos separados (formato antiguo)
+            if (!track && 'duration' in entry && 'title' in entry) {
+                track = entry;
+            }
+
             if (!info && 'manifest' in entry) {
                 info = entry;
-                continue;
             }
-            
+
             if (!originalTrackUrl && 'OriginalTrackUrl' in entry) {
                 const candidate = entry.OriginalTrackUrl;
                 if (typeof candidate === 'string') {
@@ -182,93 +249,139 @@ prepareTrack(track) {
             }
         }
 
-        if (!track || !info) {
+        // Validar que al menos tengamos algo útil
+        if (!track && !info && !originalTrackUrl) {
+            console.error('[parseTrackLookup] Response:', JSON.stringify(data, null, 2));
             throw new Error('Malformed track response');
+        }
+
+        // Si tenemos track pero no info, usar track como info también
+        if (track && !info) {
+            info = track;
+        }
+
+        // Si tenemos info pero no track, usar info como track también
+        if (info && !track) {
+            track = info;
         }
 
         return { track, info, originalTrackUrl };
     }
 
     extractStreamUrlFromManifest(manifest) {
+        if (!manifest) return null;
+
         try {
-            const decoded = atob(manifest);
-            
+            // Si el manifest ya es un string decodificado (no base64)
+            let decoded = manifest;
+
+            // Intentar decodificar base64 solo si parece ser base64
+            // Base64 típicamente solo contiene A-Z, a-z, 0-9, +, /, =
+            const looksLikeBase64 = /^[A-Za-z0-9+/=_-]+$/.test(manifest);
+
+            if (looksLikeBase64 && manifest.length > 100) {
+                try {
+                    // Normalizar base64 URL-safe
+                    const normalized = manifest.replace(/-/g, '+').replace(/_/g, '/');
+                    decoded = atob(normalized);
+                } catch (e) {
+                    // No es base64, usar el manifest tal cual
+                    console.log('[Manifest] Not base64, using as-is');
+                }
+            }
+
+            // 1. Intentar parsear como JSON
             try {
                 const parsed = JSON.parse(decoded);
-                if (parsed?.urls?.[0]) {
-                    return parsed.urls[0];
+
+                // Formato: { urls: [...] }
+                if (parsed?.urls && Array.isArray(parsed.urls) && parsed.urls.length > 0) {
+                    return this.enforceHttps(parsed.urls[0]);
+                }
+
+                // Formato: { url: "..." }
+                if (parsed?.url && typeof parsed.url === 'string') {
+                    return this.enforceHttps(parsed.url);
                 }
             } catch {
-                const match = decoded.match(/https?:\/\/[\w\-.~:?#[```@!$&'()*+,;=%/]+/);
-                return match ? match[0] : null;
+                // No es JSON, continuar
             }
+
+            // 2. Buscar URL con regex (para XML o texto plano)
+            const urlMatch = decoded.match(/https?:\/\/[^\s"<>]+(?:\.flac|\.mp4|\.m4a|\?[^\s"<>]*)/);
+            if (urlMatch && urlMatch[0]) {
+                const cleanUrl = urlMatch[0].replace(/&amp;/g, '&');
+                return this.enforceHttps(cleanUrl);
+            }
+
+            return null;
         } catch (error) {
-            console.error('Failed to decode manifest:', error);
+            console.error('Failed to extract URL from manifest:', error);
             return null;
         }
     }
-async searchTracks(query) {
-    const cached = await this.cache.get('search_tracks', query);
-    if (cached) return cached;
+    async searchTracks(query) {
+        const cached = await this.cache.get('search_tracks', query);
+        if (cached) return cached;
 
-    try {
-        const response = await this.fetchWithRetry(`/search/?s=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        const normalized = this.normalizeSearchResponse(data, 'tracks');
-        const result = {
-            ...normalized,
-            items: normalized.items.map(t => this.prepareTrack(t))
-        };
+        try {
+            const response = await this.fetchWithRetry(`/search/?s=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            const normalized = this.normalizeSearchResponse(data, 'tracks');
+            const result = {
+                ...normalized,
+                items: normalized.items.map(t => this.prepareTrack(t))
+            };
 
-        await this.cache.set('search_tracks', query, result);
-        return result;
-    } catch (error) {
-        console.error('Track search failed:', error);
-        return { items: [], limit: 0, offset: 0, totalNumberOfItems: 0 };
+            await this.cache.set('search_tracks', query, result);
+            return result;
+        } catch (error) {
+            console.error('Track search failed:', error);
+            return { items: [], limit: 0, offset: 0, totalNumberOfItems: 0 };
+        }
     }
-}
 
-async searchArtists(query) {
-    const cached = await this.cache.get('search_artists', query);
-    if (cached) return cached;
+    async searchArtists(query) {
+        const cached = await this.cache.get('search_artists', query);
+        if (cached) return cached;
 
-    try {
-        const response = await this.fetchWithRetry(`/search/?a=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        const normalized = this.normalizeSearchResponse(data, 'artists');
-        const result = {
-            ...normalized,
-            items: normalized.items.map(a => this.prepareArtist(a))
-        };
+        try {
+            const response = await this.fetchWithRetry(`/search/?a=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            const normalized = this.normalizeSearchResponse(data, 'artists');
+            const result = {
+                ...normalized,
+                items: normalized.items.map(a => this.prepareArtist(a))
+            };
 
-        await this.cache.set('search_artists', query, result);
-        return result;
-    } catch (error) {
-        console.error('Artist search failed:', error);
-        return { items: [], limit: 0, offset: 0, totalNumberOfItems: 0 };
+            await this.cache.set('search_artists', query, result);
+            return result;
+        } catch (error) {
+            console.error('Artist search failed:', error);
+            return { items: [], limit: 0, offset: 0, totalNumberOfItems: 0 };
+        }
     }
-}
 
-async searchAlbums(query) {
-    const cached = await this.cache.get('search_albums', query);
-    if (cached) return cached;
+    async searchAlbums(query) {
+        const cached = await this.cache.get('search_albums', query);
+        if (cached) return cached;
 
-    try {
-        const response = await this.fetchWithRetry(`/search/?al=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        const normalized = this.normalizeSearchResponse(data, 'albums');
-        const result = {
-            ...normalized,
-            items: normalized.items.map(a => this.prepareAlbum(a))
-        };
+        try {
+            const response = await this.fetchWithRetry(`/search/?al=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            const normalized = this.normalizeSearchResponse(data, 'albums');
+            const result = {
+                ...normalized,
+                items: normalized.items.map(a => this.prepareAlbum(a))
+            };
 
-        await this.cache.set('search_albums', query, result);
-        return result;
-    } catch (error) {
-        console.error('Album search failed:', error);
-        return { items: [], limit: 0, offset: 0, totalNumberOfItems: 0 };
+            await this.cache.set('search_albums', query, result);
+            return result;
+        } catch (error) {
+            console.error('Album search failed:', error);
+            return { items: [], limit: 0, offset: 0, totalNumberOfItems: 0 };
+        }
     }
-}
 
     async getAlbum(id) {
         const cached = await this.cache.get('album', id);
@@ -276,25 +389,74 @@ async searchAlbums(query) {
 
         const response = await this.fetchWithRetry(`/album/?id=${id}`);
         const data = await response.json();
-        const entries = Array.isArray(data) ? data : [data];
 
-        let album, tracksSection;
-        
+        // Normalizar respuesta
+        let entries = [];
+        let tracksSection = null;
+
+        // Caso 1: { version: "2.0", data: { items: [...] } }
+        if (data.data && data.data.items && Array.isArray(data.data.items)) {
+            tracksSection = data.data;
+            entries = []; // No hay entrada de álbum separada
+        }
+        // Caso 2: { data: {...} } donde data es el álbum
+        else if (data.data) {
+            entries = [data.data];
+        }
+        // Caso 3: Array de objetos
+        else if (Array.isArray(data)) {
+            entries = data;
+        }
+        // Caso 4: Objeto simple
+        else {
+            entries = [data];
+        }
+
+        let album = null;
+
+        // Buscar álbum en entries
         for (const entry of entries) {
             if (!entry || typeof entry !== 'object') continue;
-            
-            if (!album && 'numberOfTracks' in entry) {
-                album = this.prepareAlbum(entry);
+
+            // Buscar álbum - más flexible
+            if (!album && entry.id && entry.title) {
+                // Verificar que parece un álbum (tiene cover, releaseDate, etc.)
+                if (entry.cover || entry.numberOfTracks || entry.releaseDate) {
+                    album = this.prepareAlbum(entry);
+                }
             }
-            
-            if (!tracksSection && 'items' in entry) {
+
+            // Buscar sección de tracks si no la tenemos
+            if (!tracksSection && 'items' in entry && Array.isArray(entry.items)) {
                 tracksSection = entry;
             }
         }
 
-        if (!album) throw new Error('Album not found');
-
+        // Extraer tracks
         const tracks = (tracksSection?.items || []).map(i => this.prepareTrack(i.item || i));
+
+        // Si no encontramos el álbum pero tenemos tracks, construir álbum desde el primer track
+        if (!album && tracks.length > 0) {
+            const firstTrack = tracks[0];
+            if (firstTrack.album) {
+                console.log('[getAlbum] Building album info from first track');
+                album = {
+                    id: id,
+                    title: firstTrack.album.title || 'Unknown Album',
+                    cover: firstTrack.album.cover,
+                    artist: firstTrack.artist,
+                    releaseDate: firstTrack.album.releaseDate,
+                    numberOfTracks: tracks.length,
+                    duration: tracks.reduce((sum, t) => sum + (t.duration || 0), 0)
+                };
+            }
+        }
+
+        if (!album) {
+            console.error('[getAlbum] Response:', JSON.stringify(data, null, 2));
+            throw new Error('Album not found');
+        }
+
         const result = { album, tracks };
 
         await this.cache.set('album', id, result);
@@ -309,47 +471,47 @@ async searchAlbums(query) {
             this.fetchWithRetry(`/artist/?id=${id}`),
             this.fetchWithRetry(`/artist/?f=${id}`)
         ]);
-        
+
         const primaryData = await primaryResponse.json();
         const artist = this.prepareArtist(Array.isArray(primaryData) ? primaryData[0] : primaryData);
-        
+
         if (!artist) throw new Error('Primary artist details not found.');
-        
+
         const contentData = await contentResponse.json();
         const entries = Array.isArray(contentData) ? contentData : [contentData];
-        
+
         const albumMap = new Map();
         const trackMap = new Map();
-        
+
         const isTrack = v => v?.id && v.duration && v.album;
         const isAlbum = v => v?.id && v.cover && 'numberOfTracks' in v;
-        
+
         const scan = (value, visited = new Set()) => {
             if (!value || typeof value !== 'object' || visited.has(value)) return;
             visited.add(value);
-            
+
             if (Array.isArray(value)) {
                 value.forEach(item => scan(item, visited));
                 return;
             }
-            
+
             const item = value.item || value;
             if (isAlbum(item)) albumMap.set(item.id, this.prepareAlbum(item));
             if (isTrack(item)) trackMap.set(item.id, this.prepareTrack(item));
-            
+
             Object.values(value).forEach(nested => scan(nested, visited));
         };
-        
+
         entries.forEach(entry => scan(entry));
-        
-        const albums = Array.from(albumMap.values()).sort((a, b) => 
+
+        const albums = Array.from(albumMap.values()).sort((a, b) =>
             new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0)
         );
-        
+
         const tracks = Array.from(trackMap.values())
             .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
             .slice(0, 10);
-        
+
         const result = { ...artist, albums, tracks };
 
         await this.cache.set('artist', id, result);
@@ -369,33 +531,107 @@ async searchAlbums(query) {
     }
 
     async getStreamUrl(id, quality = 'LOSSLESS') {
-        const lookup = await this.getTrack(id, quality);
-        
-        if (lookup.originalTrackUrl) {
-            return lookup.originalTrackUrl;
+        // Lista de calidades en orden de prioridad
+        const qualities = [quality];
+        ['LOSSLESS', 'HIGH', 'LOW', 'HI_RES_LOSSLESS'].forEach(q => {
+            if (q !== quality) qualities.push(q);
+        });
+
+        const TIMEOUT = 15000;
+
+        for (const currentQuality of qualities) {
+            try {
+                console.log(`[Stream] Trying quality: ${currentQuality}`);
+                const response = await this.fetchWithRetry(`/track/?id=${id}&quality=${currentQuality}`, { timeout: TIMEOUT });
+
+                if (!response.ok) {
+                    console.warn(`[Stream] Response not OK for ${currentQuality}: ${response.status}`);
+                    continue;
+                }
+
+                const json = await response.json();
+
+                // Normalizar la respuesta a un array de items
+                let items = [];
+                if (json.data) {
+                    items = [json.data];
+                } else if (Array.isArray(json)) {
+                    items = json;
+                } else {
+                    items = [json];
+                }
+
+                console.log(`[Stream] Processing ${items.length} items from response`);
+
+                // 1. Buscar URL directa primero
+                for (const item of items) {
+                    const directUrl = item.OriginalTrackUrl || item.originalTrackUrl || item.url;
+                    if (directUrl && typeof directUrl === 'string' && directUrl.startsWith('http')) {
+                        console.log(`[Stream] ✓ Found direct URL (${currentQuality})`);
+                        return this.enforceHttps(directUrl);
+                    }
+                }
+
+                // 2. Intentar decodificar manifest
+                for (const item of items) {
+                    if (item.manifest) {
+                        try {
+                            // Normalizar base64 (algunos servidores usan URL-safe base64)
+                            const base64 = item.manifest.replace(/-/g, '+').replace(/_/g, '/');
+                            const decoded = atob(base64);
+
+                            // Saltar manifests DASH que no tienen BaseURL
+                            if (decoded.includes('SegmentTemplate') && !decoded.includes('BaseURL')) {
+                                console.log(`[Stream] Skipping DASH manifest without BaseURL`);
+                                continue;
+                            }
+
+                            const url = this.extractStreamUrlFromManifest(decoded);
+                            if (url) {
+                                console.log(`[Stream] ✓ Decoded manifest (${currentQuality})`);
+                                return url;
+                            }
+                        } catch (e) {
+                            console.warn(`[Stream] Failed to decode manifest:`, e.message);
+                            // Intentar extraer sin decodificar
+                            const url = this.extractStreamUrlFromManifest(item.manifest);
+                            if (url) {
+                                console.log(`[Stream] ✓ Extracted from raw manifest (${currentQuality})`);
+                                return url;
+                            }
+                        }
+                    }
+                }
+
+                console.warn(`[Stream] No playable URL found for quality ${currentQuality}`);
+            } catch (error) {
+                console.warn(`[Stream] Error with quality ${currentQuality}:`, error.message);
+            }
         }
 
-        const url = this.extractStreamUrlFromManifest(lookup.info.manifest);
-        if (url) return url;
+        throw new Error('Failed to resolve a playable stream URL for any quality');
+    }
 
-        throw new Error('Could not resolve stream URL');
+    enforceHttps(url) {
+        if (!url) return '';
+        return url.replace(/^http:/, 'https:');
     }
 
     async downloadTrack(id, quality = 'LOSSLESS', filename, trackMetadata = null) {
         const qualityPriority = ['LOSSLESS', 'HIGH', 'LOW'];
         let lastError = null;
-        
+
         // Si la calidad solicitada no está en la lista de fallback, empezar con ella
         const qualitiesToTry = quality !== 'LOSSLESS' && quality !== 'HIGH' && quality !== 'LOW'
             ? [quality, ...qualityPriority]
             : qualityPriority;
-        
+
         for (const currentQuality of qualitiesToTry) {
             try {
                 console.log(`[DOWNLOAD] Attempting download for track ${id} at quality ${currentQuality}`);
                 const lookup = await this.getTrack(id, currentQuality);
                 console.log(`[DOWNLOAD] Track lookup result:`, lookup);
-                
+
                 let streamUrl;
 
                 if (lookup.originalTrackUrl) {
@@ -409,8 +645,12 @@ async searchAlbums(query) {
                     }
                 }
 
-                // Intentar usar servidor de metadatos (localhost o producción)
-                if (trackMetadata) {
+                // Intentar usar servidor de metadatos (solo en producción)
+                const isLocalhost = window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname === '';
+
+                if (trackMetadata && !isLocalhost) {
                     console.log(`[DOWNLOAD] Using download server with metadata`);
                     try {
                         await this._downloadWithMetadata(streamUrl, filename, trackMetadata, currentQuality);
@@ -420,12 +660,14 @@ async searchAlbums(query) {
                         console.warn(`[DOWNLOAD] Metadata server failed, falling back to direct download:`, error.message);
                         // Continuar con descarga directa
                     }
+                } else if (isLocalhost && trackMetadata) {
+                    console.log(`[DOWNLOAD] Localhost detected - skipping metadata server, using direct download`);
                 }
 
                 // Descarga directa sin metadatos (fallback)
                 console.log(`[DOWNLOAD] Using direct download (no metadata)`);
                 const response = await fetch(streamUrl, { cache: 'no-store' });
-                
+
                 if (!response.ok) {
                     console.error(`[DOWNLOAD] Fetch failed with status: ${response.status} ${response.statusText}`);
                     throw new Error(`Fetch failed: ${response.status}`);
@@ -434,9 +676,9 @@ async searchAlbums(query) {
                 console.log(`[DOWNLOAD] Converting to blob...`);
                 const blob = await response.blob();
                 console.log(`[DOWNLOAD] Blob size: ${blob.size} bytes, type: ${blob.type}`);
-                
+
                 const url = URL.createObjectURL(blob);
-                
+
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = filename;
@@ -444,7 +686,7 @@ async searchAlbums(query) {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                
+
                 console.log(`[DOWNLOAD] Successfully downloaded: ${filename} at quality ${currentQuality}`);
                 return; // Éxito, salir de la función
             } catch (error) {
@@ -453,11 +695,11 @@ async searchAlbums(query) {
                 // Continuar con la siguiente calidad
             }
         }
-        
+
         // Si llegamos aquí, todas las calidades fallaron
         console.error("[DOWNLOAD] All quality attempts failed. Last error:", lastError);
         console.error("[DOWNLOAD] Error stack:", lastError?.stack);
-        
+
         if (lastError?.message === RATE_LIMIT_ERROR_MESSAGE) {
             throw lastError;
         }
@@ -470,7 +712,7 @@ async searchAlbums(query) {
         console.log('[METADATA] trackMetadata.album:', trackMetadata.album);
         console.log('[METADATA] trackMetadata.album?.artist:', trackMetadata.album?.artist);
         console.log('[METADATA] trackMetadata.artists:', trackMetadata.artists);
-        
+
         const metadata = {
             title: trackMetadata.title,
             artist: trackMetadata.artist?.name,
@@ -486,11 +728,11 @@ async searchAlbums(query) {
         };
 
         console.log('[METADATA] Prepared:', metadata);
-        
+
         // Descargar con metadatos usando Vercel
         try {
             console.log('[DOWNLOAD] Downloading with metadata via Vercel...');
-            
+
             const response = await fetch('/api/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -504,7 +746,7 @@ async searchAlbums(query) {
                     const data = await response.json();
                     errorMsg = data.error || errorMsg;
                     console.error('[DOWNLOAD] Vercel response:', data);
-                } catch (e) {}
+                } catch (e) { }
                 throw new Error(errorMsg);
             }
 
@@ -516,7 +758,7 @@ async searchAlbums(query) {
 
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
-            
+
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
@@ -524,9 +766,9 @@ async searchAlbums(query) {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
+
             console.log('[DOWNLOAD] ✓ Download complete');
-            
+
         } catch (error) {
             console.error('[DOWNLOAD] Metadata server failed:', error.message);
             throw error;  // Propagar error para fallback a descarga directa
@@ -537,7 +779,7 @@ async searchAlbums(query) {
         if (!id) {
             return `https://picsum.photos/seed/${Math.random()}/${size}`;
         }
-        
+
         const formattedId = id.replace(/-/g, '/');
         return `https://resources.tidal.com/images/${formattedId}/${size}x${size}.jpg`;
     }
@@ -546,7 +788,7 @@ async searchAlbums(query) {
         if (!id) {
             return `https://picsum.photos/seed/${Math.random()}/${size}`;
         }
-        
+
         const formattedId = id.replace(/-/g, '/');
         return `https://resources.tidal.com/images/${formattedId}/${size}x${size}.jpg`;
     }
@@ -588,17 +830,17 @@ async searchAlbums(query) {
 
         try {
             console.log('Fetching Spotify playlist:', playlistId);
-            
+
             // Usar un proxy CORS o la API embebida de Spotify
             // Primero intentamos con la API directa (algunas playlists públicas funcionan)
             let tracks = [];
             let playlistName = 'Spotify Playlist';
-            
+
             try {
                 // Intentar obtener datos básicos de la playlist usando oembed
                 const oembedUrl = `https://open.spotify.com/oembed?url=https://open.spotify.com/playlist/${playlistId}`;
                 const oembedResponse = await fetch(oembedUrl);
-                
+
                 if (oembedResponse.ok) {
                     const oembedData = await oembedResponse.json();
                     playlistName = oembedData.title || playlistName;
@@ -607,7 +849,7 @@ async searchAlbums(query) {
             } catch (err) {
                 console.warn('Could not fetch playlist metadata:', err);
             }
-            
+
             // Como no podemos acceder directamente por CORS, pedirle al usuario que nos dé los nombres
             const userInput = prompt(
                 `Please paste the track list from Spotify playlist "${playlistName}".\n\n` +
@@ -615,24 +857,24 @@ async searchAlbums(query) {
                 `Tip: You can copy the track list from Spotify web player.`,
                 ''
             );
-            
+
             if (!userInput || userInput.trim() === '') {
                 throw new Error('No tracks provided');
             }
-            
+
             // Parsear el input del usuario
             const lines = userInput.split('\n').filter(line => line.trim());
             console.log(`Parsing ${lines.length} tracks from user input`);
-            
+
             const searchPromises = [];
-            
+
             for (const line of lines) {
                 const cleanLine = line.trim();
                 if (!cleanLine) continue;
-                
+
                 // Intentar parsear diferentes formatos
                 let artistName, trackTitle;
-                
+
                 if (cleanLine.includes(' - ')) {
                     [artistName, trackTitle] = cleanLine.split(' - ').map(s => s.trim());
                 } else if (cleanLine.includes(' – ')) {
@@ -642,12 +884,12 @@ async searchAlbums(query) {
                     trackTitle = cleanLine;
                     artistName = '';
                 }
-                
+
                 if (!trackTitle) continue;
-                
+
                 const query = artistName ? `${artistName} ${trackTitle}` : trackTitle;
                 console.log(`Searching for: ${query}`);
-                
+
                 // Buscar la canción en nuestro servidor
                 searchPromises.push(
                     this.searchTracks(query)
@@ -658,12 +900,12 @@ async searchAlbums(query) {
                                 if (artistName) {
                                     for (const found of results.slice(0, 3)) {
                                         if (!found || !found.title || !found.artist) continue;
-                                        
+
                                         const titleMatch = found.title.toLowerCase().includes(trackTitle.toLowerCase()) ||
-                                                         trackTitle.toLowerCase().includes(found.title.toLowerCase());
+                                            trackTitle.toLowerCase().includes(found.title.toLowerCase());
                                         const artistMatch = found.artist.toLowerCase().includes(artistName.toLowerCase()) ||
-                                                           artistName.toLowerCase().includes(found.artist.toLowerCase());
-                                        
+                                            artistName.toLowerCase().includes(found.artist.toLowerCase());
+
                                         if (titleMatch && artistMatch) {
                                             return found;
                                         }
@@ -684,24 +926,24 @@ async searchAlbums(query) {
                         })
                 );
             }
-            
+
             // Esperar todas las búsquedas
             console.log(`Searching for ${searchPromises.length} tracks...`);
             const searchResults = await Promise.all(searchPromises);
-            
+
             // Filtrar tracks válidos
             for (const track of searchResults) {
                 if (track) {
                     tracks.push(track);
                 }
             }
-            
+
             console.log(`Successfully found ${tracks.length} tracks from Spotify playlist`);
-            
+
             if (tracks.length === 0) {
                 throw new Error('No tracks found. Please check the format and try again.');
             }
-            
+
             const result = {
                 playlist: {
                     name: playlistName,

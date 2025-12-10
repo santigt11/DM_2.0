@@ -1,5 +1,5 @@
 //sw.js
-const CACHE_NAME = 'monochrome-v2';
+const CACHE_NAME = 'monochrome-v3';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -14,45 +14,92 @@ const urlsToCache = [
     '/manifest.json'
 ];
 
+// Lista de dominios de API que NO deben ser interceptados
+const EXTERNAL_API_DOMAINS = [
+    'tidal.401658.xyz',
+    'squid.wtf',
+    'qqdl.site',
+    'resources.tidal.com'
+];
+
+// Función para verificar si una URL es de una API externa
+const isExternalAPI = (url) => {
+    return EXTERNAL_API_DOMAINS.some(domain => url.hostname.includes(domain));
+};
+
 // Skip waiting para activar el nuevo SW inmediatamente
 self.addEventListener('install', event => {
+    console.log('[SW] Installing...');
     self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(urlsToCache))
+            .then(cache => {
+                console.log('[SW] Caching app shell');
+                return cache.addAll(urlsToCache);
+            })
+            .catch(err => console.error('[SW] Cache failed:', err))
     );
 });
 
-// Network First: Intenta red primero, luego caché
+// Fetch handler mejorado
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
-    
+
+    // IMPORTANTE: NO interceptar peticiones a APIs externas
+    // Dejar que el navegador las maneje directamente
+    if (isExternalAPI(url)) {
+        console.log('[SW] Bypassing external API:', url.hostname);
+        return; // No hacer nada, dejar que la petición pase normalmente
+    }
+
+    // Solo cachear recursos de nuestro propio dominio
+    if (url.origin !== location.origin) {
+        return; // Ignorar recursos de otros dominios
+    }
+
     // Network First para HTML, CSS y JS
-    if (url.pathname.endsWith('.html') || 
-        url.pathname.endsWith('.css') || 
-        url.pathname.endsWith('.js') || 
+    if (url.pathname.endsWith('.html') ||
+        url.pathname.endsWith('.css') ||
+        url.pathname.endsWith('.js') ||
         url.pathname === '/') {
-        
+
         event.respondWith(
             fetch(event.request)
                 .then(response => {
                     // Guardar en caché la nueva versión
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, responseClone);
-                    });
+                    if (response && response.status === 200) {
+                        const responseClone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(event.request, responseClone);
+                        });
+                    }
                     return response;
                 })
                 .catch(() => {
                     // Si falla la red, usar caché
+                    console.log('[SW] Network failed, using cache for:', url.pathname);
                     return caches.match(event.request);
                 })
         );
     } else {
-        // Cache First para imágenes y otros recursos
+        // Cache First para imágenes y otros recursos locales
         event.respondWith(
             caches.match(event.request)
-                .then(response => response || fetch(event.request))
+                .then(response => {
+                    if (response) {
+                        return response;
+                    }
+                    return fetch(event.request).then(response => {
+                        // Cachear si es exitoso
+                        if (response && response.status === 200) {
+                            const responseClone = response.clone();
+                            caches.open(CACHE_NAME).then(cache => {
+                                cache.put(event.request, responseClone);
+                            });
+                        }
+                        return response;
+                    });
+                })
         );
     }
 });
