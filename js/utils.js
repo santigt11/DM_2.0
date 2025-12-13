@@ -1,4 +1,9 @@
-export const QUALITY = 'LOSSLESS';
+// Calidad para streaming (optimizada para velocidad)
+export const STREAMING_QUALITY = 'HIGH'; // AAC 320kbps - más rápido
+// Calidad para descargas (optimizada para calidad)
+export const DOWNLOAD_QUALITY = 'LOSSLESS'; // FLAC - mejor calidad
+// Mantener QUALITY para compatibilidad
+export const QUALITY = DOWNLOAD_QUALITY;
 
 export const REPEAT_MODE = {
     OFF: 0,
@@ -21,6 +26,28 @@ export const QUALITY_TOKENS = {
     HIGH: ['HIGH', 'HIGH_QUALITY'],
     LOW: ['LOW', 'LOW_QUALITY']
 };
+
+// Opciones de calidad de descarga disponibles para el usuario
+export const DOWNLOAD_QUALITY_OPTIONS = [
+    {
+        value: 'LOSSLESS',
+        label: 'FLAC (Lossless)',
+        description: 'Máxima calidad, archivos grandes (~30-40 MB por canción)',
+        extension: 'flac'
+    },
+    {
+        value: 'HIGH',
+        label: 'AAC 320kbps',
+        description: 'Alta calidad, archivos medianos (~8-12 MB por canción)',
+        extension: 'm4a'
+    },
+    {
+        value: 'LOW',
+        label: 'AAC 96kbps',
+        description: 'Calidad estándar, archivos pequeños (~3-4 MB por canción)',
+        extension: 'm4a'
+    }
+];
 
 export const RATE_LIMIT_ERROR_MESSAGE = 'Too Many Requests. Please wait a moment and try again.';
 
@@ -63,14 +90,14 @@ export const getExtensionForQuality = (quality) => {
 export const buildTrackFilename = (track, quality) => {
     const extension = getExtensionForQuality(quality);
     const trackNumber = Number(track.trackNumber);
-    const padded = Number.isFinite(trackNumber) && trackNumber > 0 
-        ? `${trackNumber}`.padStart(2, '0') 
+    const padded = Number.isFinite(trackNumber) && trackNumber > 0
+        ? `${trackNumber}`.padStart(2, '0')
         : '00';
-    
+
     const artistName = sanitizeForFilename(track.artist?.name);
     const albumTitle = sanitizeForFilename(track.album?.title);
     const trackTitle = sanitizeForFilename(track.title);
-    
+
     return `${artistName} - ${albumTitle} - ${padded} ${trackTitle}.${extension}`;
 };
 
@@ -81,21 +108,21 @@ const sanitizeToken = (value) => {
 
 export const normalizeQualityToken = (value) => {
     if (!value) return null;
-    
+
     const token = sanitizeToken(value);
-    
+
     for (const [quality, aliases] of Object.entries(QUALITY_TOKENS)) {
         if (aliases.includes(token)) {
             return quality;
         }
     }
-    
+
     return null;
 };
 
 export const deriveQualityFromTags = (rawTags) => {
     if (!Array.isArray(rawTags)) return null;
-    
+
     const candidates = [];
     for (const tag of rawTags) {
         if (typeof tag !== 'string') continue;
@@ -104,37 +131,37 @@ export const deriveQualityFromTags = (rawTags) => {
             candidates.push(normalized);
         }
     }
-    
+
     return pickBestQuality(candidates);
 };
 
 export const pickBestQuality = (candidates) => {
     let best = null;
     let bestRank = Infinity;
-    
+
     for (const candidate of candidates) {
         if (!candidate) continue;
         const rank = QUALITY_PRIORITY.indexOf(candidate);
         const currentRank = rank === -1 ? Infinity : rank;
-        
+
         if (currentRank < bestRank) {
             best = candidate;
             bestRank = currentRank;
         }
     }
-    
+
     return best;
 };
 
 export const deriveTrackQuality = (track) => {
     if (!track) return null;
-    
+
     const candidates = [
         deriveQualityFromTags(track.mediaMetadata?.tags),
         deriveQualityFromTags(track.album?.mediaMetadata?.tags),
         normalizeQualityToken(track.audioQuality)
     ];
-    
+
     return pickBestQuality(candidates);
 };
 

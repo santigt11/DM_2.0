@@ -1,10 +1,10 @@
 import { REPEAT_MODE, SVG_PLAY, SVG_PAUSE, formatTime } from './utils.js';
 
 export class Player {
-    constructor(audioElement, api, quality = 'HI_RES_LOSSLESS') {
+    constructor(audioElement, api, quality = 'HIGH') {
         this.audio = audioElement;
         this.api = api;
-        this.quality = quality;
+        this.quality = quality; // Calidad para streaming (HIGH = AAC 320kbps)
         this.queue = [];
         this.shuffledQueue = [];
         this.originalQueueBeforeShuffle = [];

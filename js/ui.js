@@ -1,5 +1,5 @@
-import { formatTime, createPlaceholder, trackDataStore, hasExplicitContent } from './utils.js';
-import { recentActivityManager } from './storage.js';
+import { formatTime, createPlaceholder, trackDataStore, hasExplicitContent, DOWNLOAD_QUALITY_OPTIONS } from './utils.js';
+import { recentActivityManager, userSettings } from './storage.js';
 
 export class UIRenderer {
     constructor(api) {
@@ -390,5 +390,22 @@ export class UIRenderer {
         if (cacheInfo) {
             cacheInfo.textContent = `Cache: ${stats.memoryEntries}/${stats.maxSize} entries`;
         }
+
+        // Populate download quality selector
+        this.populateDownloadQualitySelector();
+    }
+
+    async populateDownloadQualitySelector() {
+        const select = document.getElementById('download-quality-select');
+        if (!select) return;
+
+        const currentQuality = userSettings.getDownloadQuality();
+
+        select.innerHTML = DOWNLOAD_QUALITY_OPTIONS.map(option => `
+            <option value="${option.value}" ${option.value === currentQuality ? 'selected' : ''}>
+                ${option.label}
+            </option>
+        `).join('');
     }
 }
+

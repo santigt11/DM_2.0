@@ -14,7 +14,7 @@ export const apiSettings = {
         'https://wolf.qqdl.site',
         'https://tidal.401658.xyz'
     ],
-    
+
     getInstances() {
         try {
             const stored = localStorage.getItem(this.STORAGE_KEY);
@@ -23,7 +23,7 @@ export const apiSettings = {
             return [...this.defaultInstances];
         }
     },
-    
+
     saveInstances(instances) {
         localStorage.setItem(this.STORAGE_KEY, JSON.stringify(instances));
     }
@@ -32,7 +32,7 @@ export const apiSettings = {
 export const recentActivityManager = {
     STORAGE_KEY: 'monochrome-recent-activity',
     LIMIT: 10,
-    
+
     _get() {
         try {
             const data = localStorage.getItem(this.STORAGE_KEY);
@@ -41,15 +41,15 @@ export const recentActivityManager = {
             return { artists: [], albums: [] };
         }
     },
-    
+
     _save(data) {
         localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
     },
-    
+
     getRecents() {
         return this._get();
     },
-    
+
     _add(type, item) {
         const data = this._get();
         data[type] = data[type].filter(i => i.id !== item.id);
@@ -57,12 +57,42 @@ export const recentActivityManager = {
         data[type] = data[type].slice(0, this.LIMIT);
         this._save(data);
     },
-    
+
     addArtist(artist) {
         this._add('artists', artist);
     },
-    
+
     addAlbum(album) {
         this._add('albums', album);
     }
 };
+
+// Configuración de usuario
+export const userSettings = {
+    STORAGE_KEY: 'monochrome-user-settings',
+
+    _get() {
+        try {
+            const data = localStorage.getItem(this.STORAGE_KEY);
+            return data ? JSON.parse(data) : {};
+        } catch (e) {
+            return {};
+        }
+    },
+
+    _save(data) {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+    },
+
+    getDownloadQuality() {
+        const settings = this._get();
+        return settings.downloadQuality || 'LOSSLESS';
+    },
+
+    setDownloadQuality(quality) {
+        const settings = this._get();
+        settings.downloadQuality = quality;
+        this._save(settings);
+    }
+};
+

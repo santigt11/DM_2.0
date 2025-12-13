@@ -1,10 +1,10 @@
 import { LosslessAPI } from './api.js';
-import { apiSettings } from './storage.js';
+import { apiSettings, userSettings } from './storage.js';
 import { UIRenderer } from './ui.js';
 import { Player } from './player.js';
 import SpotifyAPI from './spotify.js';
 import {
-    QUALITY, REPEAT_MODE, SVG_PLAY, SVG_PAUSE,
+    STREAMING_QUALITY, DOWNLOAD_QUALITY_OPTIONS, REPEAT_MODE, SVG_PLAY, SVG_PAUSE,
     SVG_VOLUME, SVG_MUTE, formatTime, trackDataStore,
     buildTrackFilename, RATE_LIMIT_ERROR_MESSAGE, debounce
 } from './utils.js';
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ui = new UIRenderer(api);
 
     const audioPlayer = document.getElementById('audio-player');
-    const player = new Player(audioPlayer, api, QUALITY);
+    const player = new Player(audioPlayer, api, STREAMING_QUALITY); // Usar HIGH para streaming rápido
 
     const mainContent = document.querySelector('.main-content');
     const playPauseBtn = document.querySelector('.play-pause-btn');
@@ -220,7 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         } else if (action === 'download' && contextTrack) {
-            const filename = buildTrackFilename(contextTrack, QUALITY);
+            const downloadQuality = userSettings.getDownloadQuality();
+            const filename = buildTrackFilename(contextTrack, downloadQuality);
 
             try {
                 const tempEl = document.createElement('div');
@@ -228,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tempEl.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
                 document.body.appendChild(tempEl);
 
-                await api.downloadTrack(contextTrack.id, QUALITY, filename, contextTrack);
+                await api.downloadTrack(contextTrack.id, downloadQuality, filename, contextTrack);
 
                 tempEl.textContent = `✓ Downloaded: ${contextTrack.title}`;
                 setTimeout(() => tempEl.remove(), 3000);
@@ -504,14 +505,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let downloaded = 0;
         let failed = 0;
+        const downloadQuality = userSettings.getDownloadQuality();
 
         for (let i = 0; i < currentQueue.length; i++) {
             const track = currentQueue[i];
             notification.textContent = `Downloading ${i + 1}/${currentQueue.length}: ${track.title}...`;
 
             try {
-                const filename = buildTrackFilename(track, QUALITY);
-                await api.downloadTrack(track.id, QUALITY, filename, track);
+                const filename = buildTrackFilename(track, downloadQuality);
+                await api.downloadTrack(track.id, downloadQuality, filename, track);
                 downloaded++;
             } catch (error) {
                 console.error('Download failed:', track.title, error);
@@ -607,8 +609,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.appendChild(notification);
 
             try {
-                const filename = buildTrackFilename(track, QUALITY);
-                await api.downloadTrack(track.id, QUALITY, filename, track);
+                const downloadQuality = userSettings.getDownloadQuality();
+                const filename = buildTrackFilename(track, downloadQuality);
+                await api.downloadTrack(track.id, downloadQuality, filename, track);
                 notification.textContent = `✓ Downloaded: ${track.title}`;
                 setTimeout(() => notification.remove(), 3000);
             } catch (error) {
@@ -725,6 +728,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.textContent = originalText;
                 btn.disabled = false;
             }, 1500);
+        }
+    });
+
+    // Download Quality Selector
+    document.addEventListener('change', (e) => {
+        if (e.target.id === 'download-quality-select') {
+            const newQuality = e.target.value;
+            userSettings.setDownloadQuality(newQuality);
+            showNotification(`Download quality set to ${e.target.options[e.target.selectedIndex].text}`, 'success');
         }
     });
 
