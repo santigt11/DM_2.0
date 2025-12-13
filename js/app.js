@@ -3,8 +3,8 @@ import { apiSettings } from './storage.js';
 import { UIRenderer } from './ui.js';
 import { Player } from './player.js';
 import SpotifyAPI from './spotify.js';
-import { 
-    QUALITY, REPEAT_MODE, SVG_PLAY, SVG_PAUSE, 
+import {
+    QUALITY, REPEAT_MODE, SVG_PLAY, SVG_PAUSE,
     SVG_VOLUME, SVG_MUTE, formatTime, trackDataStore,
     buildTrackFilename, RATE_LIMIT_ERROR_MESSAGE, debounce
 } from './utils.js';
@@ -12,10 +12,10 @@ import {
 document.addEventListener('DOMContentLoaded', () => {
     const api = new LosslessAPI(apiSettings);
     const ui = new UIRenderer(api);
-    
+
     const audioPlayer = document.getElementById('audio-player');
     const player = new Player(audioPlayer, api, QUALITY);
-    
+
     const mainContent = document.querySelector('.main-content');
     const playPauseBtn = document.querySelector('.play-pause-btn');
     const nextBtn = document.getElementById('next-btn');
@@ -47,12 +47,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function showNotification(message, type = 'info') {
         const notification = document.createElement('div');
         notification.textContent = message;
-        
-        const backgroundColor = type === 'success' ? '#16a34a' : 
-                               type === 'error' ? '#dc2626' : 
-                               type === 'warning' ? '#ca8a04' : 
-                               'var(--card)';
-        
+
+        const backgroundColor = type === 'success' ? '#16a34a' :
+            type === 'error' ? '#dc2626' :
+                type === 'warning' ? '#ca8a04' :
+                    'var(--card)';
+
         notification.style.cssText = `
             position: fixed;
             bottom: 100px;
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             animation: slideIn 0.3s ease;
         `;
-        
+
         document.body.appendChild(notification);
         setTimeout(() => {
             notification.style.animation = 'slideOut 0.3s ease';
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.search-tab-content').forEach(c => c.classList.remove('active'));
-            
+
             tab.classList.add('active');
             document.getElementById(`search-tab-${tab.dataset.tab}`).classList.add('active');
         });
@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const router = () => {
         const path = window.location.hash.substring(1) || "home";
         const [page, param] = path.split('/');
-        
+
         switch (page) {
             case 'search':
                 ui.renderSearchPage(decodeURIComponent(param));
@@ -111,19 +111,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderQueue = () => {
         const currentQueue = player.getCurrentQueue();
         console.log('renderQueue called, queue length:', currentQueue.length);
-        
+
         if (currentQueue.length === 0) {
             queueList.innerHTML = '<div class="placeholder-text">Queue is empty.</div>';
             return;
         }
-        
+
         const html = currentQueue.map((track, index) => {
-            const isPlaying = index === player.currentQueueIndex && 
-                              track.id === (currentQueue[player.currentQueueIndex] || {}).id;
-            
+            const isPlaying = index === player.currentQueueIndex &&
+                track.id === (currentQueue[player.currentQueueIndex] || {}).id;
+
             return `
                 <div class="track-item ${isPlaying ? 'playing' : ''}" data-queue-index="${index}" data-track-id="${track.id}">
-                    <div class="track-number">${index + 1}</div>
+                    <div class="track-number">
+                        <span class="number">${index + 1}</span>
+                        <div class="playing-indicator">
+                            <span class="bar bar-1"></span>
+                            <span class="bar bar-2"></span>
+                            <span class="bar bar-3"></span>
+                        </div>
+                    </div>
                     <div class="track-item-info">
                         <img src="${api.getCoverUrl(track.album?.cover, '80')}" 
                              class="track-item-cover" loading="lazy">
@@ -133,14 +140,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <div class="track-item-actions">
-                        <button class="queue-item-btn download-track-btn" data-queue-index="${index}" title="Download">
+                        <div class="move-controls">
+                            <button class="queue-action-btn move-up-btn" data-queue-index="${index}" title="Move Up" ${index === 0 ? 'disabled' : ''}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                            </button>
+                            <button class="queue-action-btn move-down-btn" data-queue-index="${index}" title="Move Down" ${index === currentQueue.length - 1 ? 'disabled' : ''}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                            </button>
+                        </div>
+                        <button class="queue-action-btn download-track-btn" data-queue-index="${index}" title="Download">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                 <polyline points="7 10 12 15 17 10"></polyline>
                                 <line x1="12" y1="15" x2="12" y2="3"></line>
                             </svg>
                         </button>
-                        <button class="queue-item-btn remove-track-btn" data-queue-index="${index}" title="Remove">
+                        <button class="queue-action-btn remove-track-btn" data-queue-index="${index}" title="Remove">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -151,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         }).join('');
-        
+
         queueList.innerHTML = html;
         player.updatePlayingTrackIndicator();
     };
@@ -162,11 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const parentList = trackItem.closest('.track-list');
             const allTrackElements = Array.from(parentList.querySelectorAll('.track-item'));
             const trackList = allTrackElements.map(el => trackDataStore.get(el)).filter(Boolean);
-            
+
             if (trackList.length > 0) {
                 const clickedTrackId = trackItem.dataset.trackId;
                 const startIndex = trackList.findIndex(t => t.id == clickedTrackId);
-                
+
                 player.setQueue(trackList, startIndex);
                 shuffleBtn.classList.remove('active');
                 player.playTrackFromQueue();
@@ -179,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (trackItem) {
             e.preventDefault();
             contextTrack = trackDataStore.get(trackItem);
-            
+
             if (contextTrack) {
                 contextMenu.style.top = `${e.pageY}px`;
                 contextMenu.style.left = `${e.pageX}px`;
@@ -195,39 +210,39 @@ document.addEventListener('DOMContentLoaded', () => {
     contextMenu.addEventListener('click', async e => {
         e.stopPropagation();
         const action = e.target.dataset.action;
-        
+
         if (action === 'add-to-queue' && contextTrack) {
             const added = player.addToQueue(contextTrack);
             renderQueue();
-            
+
             const notification = document.createElement('div');
-            notification.textContent = added 
-                ? `✓ Added "${contextTrack.title}" to queue` 
+            notification.textContent = added
+                ? `✓ Added "${contextTrack.title}" to queue`
                 : `⚠ "${contextTrack.title}" already in queue`;
             notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         } else if (action === 'download' && contextTrack) {
             const filename = buildTrackFilename(contextTrack, QUALITY);
-            
+
             try {
                 const tempEl = document.createElement('div');
                 tempEl.textContent = `Downloading: ${contextTrack.title}...`;
                 tempEl.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
                 document.body.appendChild(tempEl);
-                
+
                 await api.downloadTrack(contextTrack.id, QUALITY, filename, contextTrack);
-                
+
                 tempEl.textContent = `✓ Downloaded: ${contextTrack.title}`;
                 setTimeout(() => tempEl.remove(), 3000);
             } catch (error) {
-                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE 
-                    ? error.message 
+                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE
+                    ? error.message
                     : 'Download failed. Please try again.';
                 alert(errorMsg);
             }
         }
-        
+
         contextMenu.style.display = 'none';
     });
 
@@ -240,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentAlbumTracks.length > 0) {
             player.addMultipleToQueue(currentAlbumTracks);
             renderQueue();
-            
+
             const notification = document.createElement('div');
             notification.textContent = `✓ Added ${currentAlbumTracks.length} tracks to queue`;
             notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
@@ -259,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Intentar extraer ID de Spotify
             const spotifyId = api.extractSpotifyPlaylistId(playlistUrl);
-            
+
             if (!spotifyId) {
                 throw new Error('Invalid Spotify playlist URL. Please use a valid Spotify playlist link.');
             }
@@ -270,16 +285,16 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.appendChild(notification);
 
             const { playlist, tracks } = await api.getSpotifyPlaylist(spotifyId);
-            
+
             if (tracks.length === 0) {
                 notification.textContent = '⚠️ No tracks found in playlist';
                 setTimeout(() => notification.remove(), 4000);
                 return;
             }
-            
+
             player.addMultipleToQueue(tracks);
             renderQueue();
-            
+
             notification.textContent = `✓ Added ${tracks.length} tracks from "${playlist.name || 'Playlist'}" to queue`;
             setTimeout(() => notification.remove(), 4000);
         } catch (error) {
@@ -411,8 +426,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const mode = player.toggleRepeat();
         repeatBtn.classList.toggle('active', mode !== REPEAT_MODE.OFF);
         repeatBtn.classList.toggle('repeat-one', mode === REPEAT_MODE.ONE);
-        repeatBtn.title = mode === REPEAT_MODE.OFF 
-            ? 'Repeat' 
+        repeatBtn.title = mode === REPEAT_MODE.OFF
+            ? 'Repeat'
             : (mode === REPEAT_MODE.ALL ? 'Repeat Queue' : 'Repeat One');
     });
 
@@ -420,6 +435,12 @@ document.addEventListener('DOMContentLoaded', () => {
         renderQueue();
         queueModalOverlay.style.display = 'flex';
         document.body.classList.add('modal-open');
+
+        // Sincronizar el estado del botón de shuffle en el modal
+        const shuffleQueueBtn = document.getElementById('shuffle-queue-btn');
+        if (shuffleQueueBtn) {
+            shuffleQueueBtn.classList.toggle('active', player.shuffleActive);
+        }
     });
 
     closeQueueBtn.addEventListener('click', () => {
@@ -438,11 +459,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearQueueBtn = document.getElementById('clear-queue-btn');
     clearQueueBtn?.addEventListener('click', () => {
         if (player.getCurrentQueue().length === 0) return;
-        
+
         if (confirm('Are you sure you want to clear the entire queue?')) {
             player.clearQueue();
             renderQueue();
-            
+
             const notification = document.createElement('div');
             notification.textContent = '✓ Queue cleared';
             notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
@@ -450,6 +471,24 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => notification.remove(), 2000);
         }
     });
+
+    // Shuffle Queue Button (inside modal)
+    const shuffleQueueBtn = document.getElementById('shuffle-queue-btn');
+    shuffleQueueBtn?.addEventListener('click', () => {
+        if (player.getCurrentQueue().length === 0) return;
+
+        player.toggleShuffle();
+        shuffleBtn.classList.toggle('active', player.shuffleActive);
+        shuffleQueueBtn.classList.toggle('active', player.shuffleActive);
+        renderQueue();
+
+        const notification = document.createElement('div');
+        notification.textContent = player.shuffleActive ? '✓ Queue shuffled' : '✓ Shuffle disabled';
+        notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 2000);
+    });
+
 
     // Download All Queue Button
     const downloadQueueBtn = document.getElementById('download-queue-btn');
@@ -459,37 +498,37 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Queue is empty');
             return;
         }
-        
+
         if (!confirm(`Download all ${currentQueue.length} tracks from queue?`)) return;
-        
+
         const notification = document.createElement('div');
         notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
         document.body.appendChild(notification);
-        
+
         let downloaded = 0;
         let failed = 0;
-        
+
         for (let i = 0; i < currentQueue.length; i++) {
             const track = currentQueue[i];
             notification.textContent = `Downloading ${i + 1}/${currentQueue.length}: ${track.title}...`;
-            
+
             try {
                 const filename = buildTrackFilename(track, QUALITY);
                 await api.downloadTrack(track.id, QUALITY, filename, track);
                 downloaded++;
             } catch (error) {
                 console.error('Download failed:', track.title, error);
-                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE 
-                    ? error.message 
+                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE
+                    ? error.message
                     : 'Download failed. Please try again.';
                 console.error(errorMsg);
                 failed++;
             }
-            
-            // Small delay to avoid overwhelming the server
-            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Delay between downloads to ensure Android browsers process each download
+            await new Promise(resolve => setTimeout(resolve, 800));
         }
-        
+
         notification.textContent = `✓ Downloaded: ${downloaded}/${currentQueue.length}${failed > 0 ? ` (${failed} failed)` : ''}`;
         setTimeout(() => notification.remove(), 4000);
     });
@@ -498,40 +537,61 @@ document.addEventListener('DOMContentLoaded', () => {
     queueList.addEventListener('click', async e => {
         const downloadBtn = e.target.closest('.download-track-btn');
         const removeBtn = e.target.closest('.remove-track-btn');
-        
+        const moveUpBtn = e.target.closest('.move-up-btn');
+        const moveDownBtn = e.target.closest('.move-down-btn');
+
+        if (moveUpBtn) {
+            e.stopPropagation();
+            const index = parseInt(moveUpBtn.dataset.queueIndex, 10);
+            if (index > 0) {
+                player.moveQueueItem(index, index - 1);
+                renderQueue();
+            }
+        }
+
+        if (moveDownBtn) {
+            e.stopPropagation();
+            const index = parseInt(moveDownBtn.dataset.queueIndex, 10);
+            const queueLength = player.getCurrentQueue().length;
+            if (index < queueLength - 1) {
+                player.moveQueueItem(index, index + 1);
+                renderQueue();
+            }
+        }
+
         if (downloadBtn) {
             e.stopPropagation();
             const index = parseInt(downloadBtn.dataset.queueIndex, 10);
             const currentQueue = player.getCurrentQueue();
             const track = currentQueue[index];
-            
+
             if (!track) return;
-            
+
             const notification = document.createElement('div');
             notification.textContent = `Downloading: ${track.title}...`;
             notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
             document.body.appendChild(notification);
-            
+
             try {
                 const filename = buildTrackFilename(track, QUALITY);
                 await api.downloadTrack(track.id, QUALITY, filename, track);
                 notification.textContent = `✓ Downloaded: ${track.title}`;
                 setTimeout(() => notification.remove(), 3000);
             } catch (error) {
-                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE 
-                    ? error.message 
+                const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE
+                    ? error.message
                     : 'Download failed. Please try again.';
                 notification.textContent = `✗ ${errorMsg}`;
                 setTimeout(() => notification.remove(), 4000);
             }
         }
-        
+
         if (removeBtn) {
             e.stopPropagation();
             const index = parseInt(removeBtn.dataset.queueIndex, 10);
             player.removeFromQueue(index);
             renderQueue();
-            
+
             const notification = document.createElement('div');
             notification.textContent = '✓ Track removed from queue';
             notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
@@ -552,7 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     sidebarOverlay.addEventListener('click', closeSidebar);
-    
+
     sidebar.addEventListener('click', e => {
         if (e.target.closest('a')) {
             closeSidebar();
@@ -562,11 +622,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('api-instance-list').addEventListener('click', e => {
         const button = e.target.closest('button');
         if (!button) return;
-        
+
         const li = button.closest('li');
         const index = parseInt(li.dataset.index, 10);
         const instances = apiSettings.getInstances();
-        
+
         if (button.classList.contains('move-up') && index > 0) {
             [instances[index], instances[index - 1]] = [instances[index - 1], instances[index]];
         } else if (button.classList.contains('move-down') && index < instances.length - 1) {
@@ -574,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (button.classList.contains('delete-instance')) {
             instances.splice(index, 1);
         }
-        
+
         apiSettings.saveInstances(instances);
         ui.renderApiSettings();
     });
@@ -583,17 +643,17 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const input = document.getElementById('custom-instance-input');
         const newUrl = input.value.trim();
-        
+
         if (newUrl) {
             try {
                 const url = new URL(newUrl);
                 if (url.protocol !== 'http:' && url.protocol !== 'https:') {
                     throw new Error('Invalid protocol');
                 }
-                
+
                 const instances = apiSettings.getInstances();
                 const formattedUrl = newUrl.endsWith('/') ? newUrl.slice(0, -1) : newUrl;
-                
+
                 if (!instances.includes(formattedUrl)) {
                     instances.push(formattedUrl);
                     apiSettings.saveInstances(instances);
@@ -613,7 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalText = btn.textContent;
         btn.textContent = 'Clearing...';
         btn.disabled = true;
-        
+
         try {
             await api.clearCache();
             btn.textContent = 'Cleared!';
@@ -643,29 +703,29 @@ document.addEventListener('DOMContentLoaded', () => {
         navigator.mediaSession.setActionHandler('play', () => {
             player.handlePlayPause();
         });
-        
+
         navigator.mediaSession.setActionHandler('pause', () => {
             player.handlePlayPause();
         });
-        
+
         navigator.mediaSession.setActionHandler('previoustrack', () => {
             player.playPrev();
         });
-        
+
         navigator.mediaSession.setActionHandler('nexttrack', () => {
             player.playNext();
         });
-        
+
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const skipTime = details.seekOffset || 10;
             player.seekBackward(skipTime);
         });
-        
+
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
             const skipTime = details.seekOffset || 10;
             player.seekForward(skipTime);
         });
-        
+
         navigator.mediaSession.setActionHandler('seekto', (details) => {
             if (details.fastSeek && 'fastSeek' in audioPlayer) {
                 audioPlayer.fastSeek(details.seekTime);
@@ -674,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             player.updateMediaSessionPositionState();
         });
-        
+
         navigator.mediaSession.setActionHandler('stop', () => {
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
@@ -683,10 +743,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if ('serviceWorker' in navigator) {
         // No registrar Service Worker en desarrollo (localhost)
-        const isLocalhost = location.hostname === 'localhost' || 
-                           location.hostname === '127.0.0.1' ||
-                           location.hostname === '[::1]';
-        
+        const isLocalhost = location.hostname === 'localhost' ||
+            location.hostname === '127.0.0.1' ||
+            location.hostname === '[::1]';
+
         if (isLocalhost) {
             console.log('🔧 Development mode: Service Worker disabled');
             // Desregistrar cualquier Service Worker existente
@@ -790,11 +850,11 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('Please enter a Spotify Client ID', 'error');
             return;
         }
-        
+
         // Guardar Client ID
         localStorage.setItem('spotify_client_id', clientId);
         spotifyAPI.clientId = clientId;
-        
+
         // Iniciar flujo de autorización
         spotifyAPI.authorize();
     });
@@ -828,7 +888,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Obtener información de la playlist
             const playlist = await spotifyAPI.getPlaylist(playlistId);
-            
+
             // Mostrar información
             spotifyPlaylistInfo.style.display = 'block';
             document.getElementById('spotify-playlist-details').innerHTML = `
@@ -840,7 +900,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let allTracks = [];
             let offset = 0;
             const limit = 100;
-            
+
             while (offset < playlist.tracks.total) {
                 const data = await spotifyAPI.getPlaylistTracks(playlistId, limit, offset);
                 allTracks = allTracks.concat(data.items);
@@ -868,7 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderSpotifyTracks(tracks) {
         currentSpotifyTracks = tracks;
-        
+
         spotifyTracksList.innerHTML = tracks.map((track, index) => `
             <div class="spotify-track-item" data-index="${index}">
                 <div class="spotify-track-number">${index + 1}</div>
@@ -908,7 +968,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.stopPropagation();
                 const index = parseInt(btn.dataset.index);
                 const track = tracks[index];
-                
+
                 // Buscar en TIDAL usando ISRC o título + artista
                 const query = track.isrc || `${track.title} ${track.artist}`;
                 window.location.hash = `search/${encodeURIComponent(query)}`;
@@ -926,7 +986,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         addAllBtn.disabled = true;
-        
+
         const total = currentSpotifyTracks.length;
         let processed = 0;
         let addedCount = 0;
@@ -936,22 +996,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchSize = 10;
         for (let i = 0; i < total; i += batchSize) {
             const batch = currentSpotifyTracks.slice(i, i + batchSize);
-            
+
             // Actualizar progreso
             addAllBtn.textContent = `Adding ${Math.min(i + batchSize, total)}/${total}...`;
-            
+
             try {
                 // Procesar lote en paralelo con información detallada y timeout
                 const batchPromises = batch.map(async (track, index) => {
                     try {
                         // Timeout de 30 segundos por track
-                        const timeoutPromise = new Promise((_, reject) => 
+                        const timeoutPromise = new Promise((_, reject) =>
                             setTimeout(() => reject(new Error('Timeout')), 30000)
                         );
-                        
+
                         const searchPromise = addSpotifyTrackToQueue(track, false);
                         const result = await Promise.race([searchPromise, timeoutPromise]);
-                        
+
                         if (!result) {
                             failedTracks.push({
                                 title: track.title,
@@ -972,18 +1032,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         return false;
                     }
                 });
-                
+
                 const results = await Promise.all(batchPromises);
-                
+
                 // Contar exitosos
                 addedCount += results.filter(Boolean).length;
                 processed += batch.length;
-                
+
                 // Pequeña pausa entre lotes para evitar sobrecarga
                 if (i + batchSize < total) {
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
-                
+
             } catch (error) {
                 console.error(`Error processing batch ${i}-${i + batchSize}:`, error);
                 // Si falla todo el lote, marcar todas como fallidas
@@ -1010,13 +1070,13 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         const successRate = Math.round((addedCount / total) * 100);
-        
+
         // Mostrar resumen
         if (failedTracks.length === 0) {
             showNotification(`✓ All ${total} tracks added successfully!`, 'success');
         } else {
             showNotification(`✓ Added ${addedCount}/${total} tracks (${successRate}%)`, 'warning');
-            
+
             // Mostrar modal con canciones fallidas
             showFailedTracksModal(failedTracks);
         }
@@ -1034,20 +1094,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     .replace(/\s*(feat|ft|featuring|with|vs|x)\s*.+$/i, '') // Remover feat
                     .trim();
             };
-            
+
             const searchTitle = cleanForSearch(spotifyTrack.title);
             let results = null;
-            
+
             // Estrategia 1: Buscar por ISRC (más preciso)
             if (spotifyTrack.isrc) {
                 results = await api.searchTracks(spotifyTrack.isrc);
             }
-            
+
             // Estrategia 2: Si no hay resultados, buscar por título limpio + artista
             if (!results?.items || results.items.length === 0) {
                 results = await api.searchTracks(`${searchTitle} ${spotifyTrack.artist}`);
             }
-            
+
             // Estrategia 3: Remover "The", números y símbolos del artista
             if (!results?.items || results.items.length === 0) {
                 const cleanArtist = spotifyTrack.artist
@@ -1055,17 +1115,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     .replace(/\d+\.?\d*/g, '')
                     .replace(/[^\w\s]/g, ' ')
                     .trim();
-                
+
                 if (cleanArtist !== spotifyTrack.artist) {
                     results = await api.searchTracks(`${searchTitle} ${cleanArtist}`);
                 }
             }
-            
+
             // Estrategia 4: Si aún no hay resultados, buscar solo por título limpio
             if (!results?.items || results.items.length === 0) {
                 results = await api.searchTracks(searchTitle);
             }
-            
+
             if (!results?.items || results.items.length === 0) {
                 if (showNotif) {
                     showNotification(`No match: "${spotifyTrack.title}"`, 'error');
@@ -1086,19 +1146,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     .replace(/\s+/g, ' ') // Múltiples espacios → uno
                     .trim();
             };
-            
+
             const spotifyTitle = cleanAndNormalize(spotifyTrack.title);
             const spotifyArtist = cleanAndNormalize(spotifyTrack.artist);
-            
+
             let bestMatch = null;
             let bestScore = 0;
-            
+
             for (const item of results.items) {
                 const tidalTitle = cleanAndNormalize(item.title);
                 const tidalArtist = cleanAndNormalize(item.artist?.name || '');
-                
+
                 let score = 0;
-                
+
                 // Score de título (0-100)
                 if (tidalTitle === spotifyTitle) {
                     score += 100;
@@ -1107,7 +1167,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     continue;
                 }
-                
+
                 // Score de artista (0-100)
                 if (tidalArtist === spotifyArtist) {
                     score += 100;
@@ -1118,16 +1178,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     continue;
                 }
-                
+
                 if (score > bestScore) {
                     bestScore = score;
                     bestMatch = item;
                 }
             }
-            
+
             if (bestMatch) {
                 const added = player.addToQueue(bestMatch);
-                
+
                 if (showNotif) {
                     if (added) {
                         showNotification(`Added "${bestMatch.title}" by ${bestMatch.artist?.name}`, 'success');
@@ -1135,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         showNotification(`"${bestMatch.title}" already in queue`, 'warning');
                     }
                 }
-                
+
                 return true;
             } else {
                 if (showNotif) {
@@ -1170,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         failedTracks.forEach(track => {
             const item = document.createElement('div');
             item.className = 'failed-track-item';
-            
+
             const reasonText = track.reason ? ` (${track.reason})` : '';
             item.innerHTML = `
                 <div class="failed-track-info">
@@ -1182,9 +1242,9 @@ document.addEventListener('DOMContentLoaded', () => {
             list.appendChild(item);
         });
 
-    // Mostrar modal
-    modal.style.display = 'flex';
-    document.body.classList.add('modal-open');
+        // Mostrar modal
+        modal.style.display = 'flex';
+        document.body.classList.add('modal-open');
 
         // Configurar eventos de botones
         setupFailedTracksEvents();
@@ -1247,7 +1307,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Copiar lista de canciones
         copyBtn.onclick = () => {
-            const trackList = currentFailedTracks.map(track => 
+            const trackList = currentFailedTracks.map(track =>
                 `${track.index}. ${track.title} - ${track.artist}`
             ).join('\n');
 

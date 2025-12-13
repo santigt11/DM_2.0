@@ -483,7 +483,8 @@ export class LosslessAPI {
         const albumMap = new Map();
         const trackMap = new Map();
 
-        const isTrack = v => v?.id && v.duration && v.album;
+        // Hacer isTrack más flexible para capturar sencillos también
+        const isTrack = v => v?.id && v.duration;
         const isAlbum = v => v?.id && v.cover && 'numberOfTracks' in v;
 
         const scan = (value, visited = new Set()) => {
@@ -684,7 +685,13 @@ export class LosslessAPI {
                 a.download = filename;
                 document.body.appendChild(a);
                 a.click();
+
+                // Delay before cleanup to ensure Android browsers process the download
+                await new Promise(resolve => setTimeout(resolve, 100));
                 document.body.removeChild(a);
+
+                // Additional delay before revoking URL to prevent Android download failures
+                await new Promise(resolve => setTimeout(resolve, 200));
                 URL.revokeObjectURL(url);
 
                 console.log(`[DOWNLOAD] Successfully downloaded: ${filename} at quality ${currentQuality}`);
@@ -764,7 +771,13 @@ export class LosslessAPI {
             a.download = filename;
             document.body.appendChild(a);
             a.click();
+
+            // Delay before cleanup to ensure Android browsers process the download
+            await new Promise(resolve => setTimeout(resolve, 100));
             document.body.removeChild(a);
+
+            // Additional delay before revoking URL to prevent Android download failures
+            await new Promise(resolve => setTimeout(resolve, 200));
             URL.revokeObjectURL(url);
 
             console.log('[DOWNLOAD] ✓ Download complete');

@@ -23,26 +23,26 @@ export class Player {
         if (this.preloadAbortController) {
             this.preloadAbortController.abort();
         }
-        
+
         this.preloadAbortController = new AbortController();
         const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
         const tracksToPreload = [];
-        
+
         for (let i = 1; i <= 2; i++) {
             const nextIndex = this.currentQueueIndex + i;
             if (nextIndex < currentQueue.length) {
                 tracksToPreload.push({ track: currentQueue[nextIndex], index: nextIndex });
             }
         }
-        
+
         for (const { track, index } of tracksToPreload) {
             if (this.preloadCache.has(track.id)) continue;
-            
+
             try {
                 const streamUrl = await this.api.getStreamUrl(track.id, this.quality);
-                
+
                 if (this.preloadAbortController.signal.aborted) break;
-                
+
                 fetch(streamUrl, {
                     signal: this.preloadAbortController.signal,
                     method: 'GET',
@@ -57,7 +57,7 @@ export class Player {
                         console.debug('Preload failed for:', track.title);
                     }
                 });
-                
+
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     console.debug('Failed to get stream URL for preload:', track.title);
@@ -73,30 +73,30 @@ export class Player {
         }
 
         const track = currentQueue[this.currentQueueIndex];
-        
-        document.querySelector('.now-playing-bar .cover').src = 
+
+        document.querySelector('.now-playing-bar .cover').src =
             this.api.getCoverUrl(track.album?.cover, '160');
         document.querySelector('.now-playing-bar .title').textContent = track.title;
         document.querySelector('.now-playing-bar .artist').textContent = track.artist?.name || 'Unknown Artist';
         document.title = `${track.title} • ${track.artist?.name || 'Unknown'}`;
-        
+
         this.updatePlayingTrackIndicator();
         this.updateMediaSession(track);
 
         try {
             let streamUrl;
-            
+
             if (this.preloadCache.has(track.id)) {
                 streamUrl = this.preloadCache.get(track.id);
             } else {
                 streamUrl = await this.api.getStreamUrl(track.id, this.quality);
             }
-            
+
             this.audio.src = streamUrl;
             await this.audio.play();
-            
+
             this.preloadNextTracks();
-            
+
         } catch (error) {
             console.error(`Could not get track URL for: ${track.title}`, error);
             document.querySelector('.now-playing-bar .title').textContent = `Error: ${track.title}`;
@@ -159,7 +159,7 @@ export class Player {
             const currentTrack = this.queue[this.currentQueueIndex];
             this.shuffledQueue = [...this.queue].sort(() => Math.random() - 0.5);
             this.currentQueueIndex = this.shuffledQueue.findIndex(t => t.id === currentTrack?.id);
-            
+
             if (this.currentQueueIndex === -1 && currentTrack) {
                 this.shuffledQueue.unshift(currentTrack);
                 this.currentQueueIndex = 0;
@@ -169,7 +169,7 @@ export class Player {
             this.queue = [...this.originalQueueBeforeShuffle];
             this.currentQueueIndex = this.queue.findIndex(t => t.id === currentTrack?.id);
         }
-        
+
         this.preloadCache.clear();
         this.preloadNextTracks();
     }
@@ -188,10 +188,10 @@ export class Player {
 
     addToQueue(track) {
         // Evitar duplicados: verificar si ya existe en la cola
-        const isDuplicate = this.queue.some(queueTrack => 
+        const isDuplicate = this.queue.some(queueTrack =>
             queueTrack.id === track.id
         );
-        
+
         if (!isDuplicate) {
             this.queue.push(track);
             if (this.shuffleActive) {
@@ -204,17 +204,17 @@ export class Player {
 
     addMultipleToQueue(tracks) {
         if (Array.isArray(tracks)) {
-            const newTracks = tracks.filter(track => 
+            const newTracks = tracks.filter(track =>
                 !this.queue.some(queueTrack => queueTrack.id === track.id)
             );
-            
+
             if (newTracks.length > 0) {
                 this.queue.push(...newTracks);
                 if (this.shuffleActive) {
                     this.shuffledQueue.push(...newTracks);
                 }
             }
-            
+
             return {
                 added: newTracks.length,
                 duplicates: tracks.length - newTracks.length
@@ -227,7 +227,7 @@ export class Player {
         this.queue = [];
         this.shuffledQueue = [];
         this.currentQueueIndex = 0;
-        
+
         // Si hay reproducción activa, pausar
         if (this.audio && !this.audio.paused) {
             this.pause();
@@ -236,7 +236,7 @@ export class Player {
 
     removeFromQueue(index) {
         const currentQueue = this.getCurrentQueue();
-        
+
         // Validar índice
         if (index < 0 || index >= currentQueue.length) {
             console.warn('Invalid queue index:', index);
@@ -248,7 +248,7 @@ export class Player {
             // Remover de shuffledQueue
             const track = this.shuffledQueue[index];
             this.shuffledQueue.splice(index, 1);
-            
+
             // También remover de queue normal
             const normalIndex = this.queue.findIndex(t => t.id === track.id);
             if (normalIndex !== -1) {
@@ -258,7 +258,7 @@ export class Player {
             // Remover de queue normal
             const track = this.queue[index];
             this.queue.splice(index, 1);
-            
+
             // También remover de shuffledQueue si existe
             if (this.shuffledQueue.length > 0) {
                 const shuffledIndex = this.shuffledQueue.findIndex(t => t.id === track.id);
@@ -282,12 +282,38 @@ export class Player {
                     if (this.currentQueueIndex >= currentQueue.length) {
                         this.currentQueueIndex = currentQueue.length - 1;
                     }
-                    this.play(currentQueue[this.currentQueueIndex]);
+                    this.playTrackFromQueue();
                 } else {
                     // Queue vacía, resetear
                     this.currentQueueIndex = 0;
                 }
             }
+        }
+    }
+
+    moveQueueItem(fromIndex, toIndex) {
+        const currentQueue = this.getCurrentQueue();
+
+        if (fromIndex < 0 || fromIndex >= currentQueue.length ||
+            toIndex < 0 || toIndex >= currentQueue.length ||
+            fromIndex === toIndex) {
+            return;
+        }
+
+        const trackToMove = currentQueue[fromIndex];
+
+        // Remove from old position
+        currentQueue.splice(fromIndex, 1);
+        // Insert at new position
+        currentQueue.splice(toIndex, 0, trackToMove);
+
+        // Update currentQueueIndex
+        if (this.currentQueueIndex === fromIndex) {
+            this.currentQueueIndex = toIndex;
+        } else if (fromIndex < this.currentQueueIndex && toIndex >= this.currentQueueIndex) {
+            this.currentQueueIndex--;
+        } else if (fromIndex > this.currentQueueIndex && toIndex <= this.currentQueueIndex) {
+            this.currentQueueIndex++;
         }
     }
 
@@ -297,21 +323,31 @@ export class Player {
 
     updatePlayingTrackIndicator() {
         const currentTrack = this.getCurrentQueue()[this.currentQueueIndex];
+
         document.querySelectorAll('.track-item').forEach(item => {
-            item.classList.toggle('playing', 
-                currentTrack && item.dataset.trackId == currentTrack.id
-            );
+            let isPlaying = false;
+
+            if (item.hasAttribute('data-queue-index')) {
+                // Para elementos de la cola, usar el índice exacto
+                const itemIndex = parseInt(item.dataset.queueIndex, 10);
+                isPlaying = (itemIndex === this.currentQueueIndex);
+            } else {
+                // Para otras listas (búsqueda, álbum, playlist), usar ID
+                isPlaying = (currentTrack && item.dataset.trackId == currentTrack.id);
+            }
+
+            item.classList.toggle('playing', isPlaying);
         });
     }
 
     updateMediaSession(track) {
         if (!('mediaSession' in navigator)) return;
-        
+
         const artwork = [];
         const sizes = ['96', '128', '192', '256', '384', '512'];
-        
+
         const coverId = track.album?.cover;
-        
+
         if (coverId) {
             sizes.forEach(size => {
                 const url = this.api.getCoverUrl(coverId, size);
@@ -322,7 +358,7 @@ export class Player {
                 });
             });
         }
-        
+
         navigator.mediaSession.metadata = new MediaMetadata({
             title: track.title || 'Unknown Title',
             artist: track.artist?.name || 'Unknown Artist',
