@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 track.id === (currentQueue[player.currentQueueIndex] || {}).id;
 
             return `
-                <div class="track-item ${isPlaying ? 'playing' : ''}" data-queue-index="${index}" data-track-id="${track.id}">
+                <div class="track-item ${isPlaying ? 'playing' : ''}" data-queue-index="${index}" data-track-id="${track.id}" draggable="true">
                     <div class="track-number">
                         <span class="number">${index + 1}</span>
                         <div class="playing-indicator">
@@ -140,14 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <div class="track-item-actions">
-                        <div class="move-controls">
-                            <button class="queue-action-btn move-up-btn" data-queue-index="${index}" title="Move Up" ${index === 0 ? 'disabled' : ''}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-                            </button>
-                            <button class="queue-action-btn move-down-btn" data-queue-index="${index}" title="Move Down" ${index === currentQueue.length - 1 ? 'disabled' : ''}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                            </button>
-                        </div>
                         <button class="queue-action-btn download-track-btn" data-queue-index="${index}" title="Download">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -162,7 +154,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             </svg>
                         </button>
                     </div>
-                    <div class="track-item-duration">${formatTime(track.duration)}</div>
+                    <div class="drag-handle" title="Drag to reorder">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                        </svg>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -533,31 +530,68 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => notification.remove(), 4000);
     });
 
-    // Queue Item Actions (Download & Remove)
+    // Queue Item Actions (Download, Remove & Drag/Drop)
+    let draggedIndex = null;
+
+    queueList.addEventListener('dragstart', e => {
+        const trackItem = e.target.closest('.track-item');
+        if (trackItem) {
+            draggedIndex = parseInt(trackItem.dataset.queueIndex, 10);
+            trackItem.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', trackItem.innerHTML);
+        }
+    });
+
+    queueList.addEventListener('dragend', e => {
+        const trackItem = e.target.closest('.track-item');
+        if (trackItem) {
+            trackItem.classList.remove('dragging');
+            document.querySelectorAll('.track-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+        draggedIndex = null;
+    });
+
+    queueList.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        const trackItem = e.target.closest('.track-item');
+        if (trackItem && draggedIndex !== null) {
+            const targetIndex = parseInt(trackItem.dataset.queueIndex, 10);
+            if (targetIndex !== draggedIndex) {
+                document.querySelectorAll('.track-item').forEach(item => {
+                    item.classList.remove('drag-over');
+                });
+                trackItem.classList.add('drag-over');
+            }
+        }
+    });
+
+    queueList.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const trackItem = e.target.closest('.track-item');
+        if (trackItem && draggedIndex !== null) {
+            const targetIndex = parseInt(trackItem.dataset.queueIndex, 10);
+
+            if (targetIndex !== draggedIndex) {
+                player.moveQueueItem(draggedIndex, targetIndex);
+                renderQueue();
+            }
+        }
+
+        document.querySelectorAll('.track-item').forEach(item => {
+            item.classList.remove('drag-over');
+        });
+    });
+
     queueList.addEventListener('click', async e => {
         const downloadBtn = e.target.closest('.download-track-btn');
         const removeBtn = e.target.closest('.remove-track-btn');
-        const moveUpBtn = e.target.closest('.move-up-btn');
-        const moveDownBtn = e.target.closest('.move-down-btn');
-
-        if (moveUpBtn) {
-            e.stopPropagation();
-            const index = parseInt(moveUpBtn.dataset.queueIndex, 10);
-            if (index > 0) {
-                player.moveQueueItem(index, index - 1);
-                renderQueue();
-            }
-        }
-
-        if (moveDownBtn) {
-            e.stopPropagation();
-            const index = parseInt(moveDownBtn.dataset.queueIndex, 10);
-            const queueLength = player.getCurrentQueue().length;
-            if (index < queueLength - 1) {
-                player.moveQueueItem(index, index + 1);
-                renderQueue();
-            }
-        }
 
         if (downloadBtn) {
             e.stopPropagation();

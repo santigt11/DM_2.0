@@ -285,6 +285,7 @@ export class UIRenderer {
         const imageEl = document.getElementById('artist-detail-image');
         const nameEl = document.getElementById('artist-detail-name');
         const metaEl = document.getElementById('artist-detail-meta');
+        const typeEl = document.querySelector('#page-artist .type');
         const tracksContainer = document.getElementById('artist-detail-tracks');
         const albumsContainer = document.getElementById('artist-detail-albums');
 
@@ -296,12 +297,42 @@ export class UIRenderer {
         albumsContainer.innerHTML = this.createSkeletonCards(6, false);
 
         try {
+            console.log('[renderArtistPage] Fetching artist with ID:', artistId);
             const artist = await this.api.getArtist(artistId);
+            console.log('[renderArtistPage] Artist data received:', artist);
+            console.log('[renderArtistPage] Artist ID:', artist.id);
+            console.log('[renderArtistPage] Artist name:', artist.name);
+            console.log('[renderArtistPage] Artist picture:', artist.picture);
+            console.log('[renderArtistPage] Artist popularity:', artist.popularity);
+            console.log('[renderArtistPage] Artist type:', artist.type);
+            console.log('[renderArtistPage] Artist tracks count:', artist.tracks?.length);
+            console.log('[renderArtistPage] Artist albums count:', artist.albums?.length);
 
-            // Usar artist.id para obtener la imagen, no artist.picture
-            imageEl.src = this.api.getArtistPictureUrl(artist.id, '750');
+            // Usar artist.picture si existe, sino usar selectedAlbumCoverFallback, y como último recurso artist.id
+            let pictureId = artist.picture || artist.selectedAlbumCoverFallback || artist.id;
+            console.log('[renderArtistPage] Using picture ID:', pictureId);
+
+            // Si usamos selectedAlbumCoverFallback, usar getCoverUrl en lugar de getArtistPictureUrl
+            const artistImageUrl = (artist.picture || !artist.selectedAlbumCoverFallback)
+                ? this.api.getArtistPictureUrl(pictureId, '750')
+                : this.api.getCoverUrl(pictureId, '750');
+
+            console.log('[renderArtistPage] Generated image URL:', artistImageUrl);
+
+            imageEl.src = artistImageUrl;
             imageEl.style.backgroundColor = '';
+
+            // Manejar error de carga de imagen
+            imageEl.onerror = () => {
+                console.warn('[renderArtistPage] Failed to load artist image, using placeholder');
+                imageEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.name || 'Artist')}&size=750&background=random&color=fff&bold=true`;
+            };
             nameEl.textContent = artist.name || 'Unknown Artist';
+
+            // Actualizar el tipo de artista
+            if (typeEl) {
+                typeEl.textContent = artist.type || 'Artist';
+            }
 
             // Mostrar popularidad solo si existe
             if (artist.popularity !== undefined && artist.popularity !== null) {

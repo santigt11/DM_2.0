@@ -2579,11 +2579,15 @@ input:checked+.slider:before {
     }
 }
 
-.move-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-right: 8px;
+/* Drag States */
+.track-item.dragging {
+    opacity: 0.5;
+    background-color: var(--secondary);
+}
+
+.track-item.drag-over {
+    border-top: 2px solid var(--highlight);
+    margin-top: 2px;
 }
 
 .queue-action-btn {
@@ -2620,15 +2624,6 @@ input:checked+.slider:before {
     pointer-events: none;
 }
 
-.move-controls .queue-action-btn {
-    padding: 2px;
-}
-
-.move-controls .queue-action-btn svg {
-    width: 12px;
-    height: 12px;
-}
-
 /* Specific button colors on hover */
 .remove-track-btn:hover {
     color: #ef4444;
@@ -2641,7 +2636,29 @@ input:checked+.slider:before {
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-.move-up-btn:hover,
-.move-down-btn:hover {
-    background-color: var(--secondary);
+/* Queue-specific track item layout with drag handle */
+#queue-list .track-item {
+    grid-template-columns: 40px 1fr auto auto;
+    /* track-number, track-item-info, track-item-actions, drag-handle */
+}
+
+/* Drag Handle Styles */
+.drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted-foreground);
+    cursor: grab;
+    padding: 0.5rem;
+    opacity: 1;
+    /* Always visible at the end */
+    transition: color 0.2s ease;
+}
+
+.track-item:hover .drag-handle {
+    color: var(--foreground);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
 }

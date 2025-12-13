@@ -200,6 +200,11 @@ export class LosslessAPI {
     }
 
     prepareArtist(artist) {
+        // Si la respuesta viene en formato v2.0, extraer el objeto artist interno
+        if (artist.version === "2.0" && artist.artist) {
+            artist = artist.artist;
+        }
+
         if (!artist.type && Array.isArray(artist.artistTypes) && artist.artistTypes.length > 0) {
             return { ...artist, type: artist.artistTypes[0] };
         }
@@ -467,17 +472,28 @@ export class LosslessAPI {
         const cached = await this.cache.get('artist', id);
         if (cached) return cached;
 
+        console.log('[getArtist] Fetching artist ID:', id);
         const [primaryResponse, contentResponse] = await Promise.all([
             this.fetchWithRetry(`/artist/?id=${id}`),
             this.fetchWithRetry(`/artist/?f=${id}`)
         ]);
 
         const primaryData = await primaryResponse.json();
+        console.log('[getArtist] Primary data received:', primaryData);
+
         const artist = this.prepareArtist(Array.isArray(primaryData) ? primaryData[0] : primaryData);
+        console.log('[getArtist] Prepared artist:', artist);
 
         if (!artist) throw new Error('Primary artist details not found.');
 
         const contentData = await contentResponse.json();
+        console.log('[getArtist] Content data structure:', {
+            isArray: Array.isArray(contentData),
+            keys: Object.keys(contentData),
+            hasAlbums: 'albums' in contentData,
+            hasTracks: 'tracks' in contentData
+        });
+
         const entries = Array.isArray(contentData) ? contentData : [contentData];
 
         const albumMap = new Map();
@@ -497,13 +513,27 @@ export class LosslessAPI {
             }
 
             const item = value.item || value;
-            if (isAlbum(item)) albumMap.set(item.id, this.prepareAlbum(item));
-            if (isTrack(item)) trackMap.set(item.id, this.prepareTrack(item));
+            if (isAlbum(item)) {
+                albumMap.set(item.id, this.prepareAlbum(item));
+            }
+            if (isTrack(item)) {
+                trackMap.set(item.id, this.prepareTrack(item));
+            }
 
             Object.values(value).forEach(nested => scan(nested, visited));
         };
 
         entries.forEach(entry => scan(entry));
+
+        // Si contentData tiene una estructura específica con tracks, procesarlos directamente
+        if (contentData.tracks && Array.isArray(contentData.tracks)) {
+            console.log('[getArtist] Found direct tracks array:', contentData.tracks.length);
+            contentData.tracks.forEach(track => {
+                if (isTrack(track)) {
+                    trackMap.set(track.id, this.prepareTrack(track));
+                }
+            });
+        }
 
         const albums = Array.from(albumMap.values()).sort((a, b) =>
             new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0)
@@ -513,7 +543,12 @@ export class LosslessAPI {
             .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
             .slice(0, 10);
 
+        console.log('[getArtist] Found albums:', albums.length);
+        console.log('[getArtist] Found tracks:', tracks.length);
+        console.log('[getArtist] Sample tracks:', tracks.slice(0, 3).map(t => ({ id: t.id, title: t.title, album: t.album?.title })));
+
         const result = { ...artist, albums, tracks };
+        console.log('[getArtist] Final result:', result);
 
         await this.cache.set('artist', id, result);
         return result;
@@ -793,7 +828,9 @@ export class LosslessAPI {
             return `https://picsum.photos/seed/${Math.random()}/${size}`;
         }
 
-        const formattedId = id.replace(/-/g, '/');
+        // Convertir a string si es un número
+        const idStr = String(id);
+        const formattedId = idStr.replace(/-/g, '/');
         return `https://resources.tidal.com/images/${formattedId}/${size}x${size}.jpg`;
     }
 
@@ -802,7 +839,9 @@ export class LosslessAPI {
             return `https://picsum.photos/seed/${Math.random()}/${size}`;
         }
 
-        const formattedId = id.replace(/-/g, '/');
+        // Convertir a string si es un número
+        const idStr = String(id);
+        const formattedId = idStr.replace(/-/g, '/');
         return `https://resources.tidal.com/images/${formattedId}/${size}x${size}.jpg`;
     }
 
