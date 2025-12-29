@@ -1,4 +1,4 @@
-﻿from http.server import BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler
 import json
 import requests
 import tempfile
