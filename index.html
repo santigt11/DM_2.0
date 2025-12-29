@@ -26,8 +26,22 @@
     <div id="context-menu">
         <ul>
             <li data-action="add-to-queue">Add to Queue</li>
+            <li data-action="add-to-playlist">Add to Playlist</li>
             <li data-action="download">Download</li>
         </ul>
+    </div>
+    <!-- Add to Playlist Submenu -->
+    <div id="add-to-playlist-menu" class="add-to-playlist-menu" style="display: none;">
+        <div class="add-to-playlist-menu-header">Add to Playlist</div>
+        <div id="add-to-playlist-list"></div>
+        <div class="add-to-playlist-menu-item add-to-playlist-menu-new" data-action="new-playlist">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Create New Playlist</span>
+        </div>
     </div>
     <div id="queue-modal-overlay" style="display: none;">
         <div id="queue-modal">
@@ -110,6 +124,28 @@
         </div>
     </div>
 
+    <!-- Playlists Modal -->
+    <div id="playlists-modal-overlay" style="display: none;">
+        <div id="playlists-modal">
+            <div id="playlists-modal-header">
+                <h3>Your Playlists</h3>
+                <button id="close-playlists-btn" class="btn-icon" title="Close">&times;</button>
+            </div>
+            <div id="playlists-modal-content">
+                <div class="create-playlist-form" id="create-playlist-form" style="display: none;">
+                    <input type="text" id="new-playlist-name" placeholder="Playlist name" maxlength="100">
+                    <textarea id="new-playlist-description" placeholder="Description (optional)"
+                        maxlength="300"></textarea>
+                    <div class="create-playlist-form-actions">
+                        <button class="btn-secondary" id="cancel-create-playlist">Cancel</button>
+                        <button class="btn btn-primary" id="save-new-playlist">Create Playlist</button>
+                    </div>
+                </div>
+                <div class="playlists-grid" id="playlists-grid"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="sidebar-overlay"></div>
 
     <div class="app-container">
@@ -162,6 +198,23 @@
                         </li>
                     </ul>
                 </nav>
+                <!-- Playlists Section -->
+                <div class="sidebar-playlists">
+                    <div class="sidebar-playlists-header">
+                        <h4>Your Library</h4>
+                        <button class="create-playlist-btn" id="create-playlist-btn" title="Create Playlist">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="sidebar-playlists-list" id="sidebar-playlists-list">
+                        <!-- Playlists will be rendered here -->
+                    </div>
+                </div>
             </div>
         </aside>
 
@@ -246,6 +299,76 @@
                     <h2 class="section-title">Albums</h2>
                     <div class="card-grid" id="artist-detail-albums"></div>
                 </section>
+            </div>
+
+            <div id="page-playlist" class="page">
+                <header class="playlist-detail-header">
+                    <div class="playlist-detail-cover" id="playlist-detail-cover">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 18V5l12-2v13"></path>
+                            <circle cx="6" cy="18" r="3"></circle>
+                            <circle cx="18" cy="16" r="3"></circle>
+                        </svg>
+                    </div>
+                    <div class="playlist-detail-info">
+                        <div class="playlist-detail-type">Playlist</div>
+                        <h1 class="playlist-detail-name" id="playlist-detail-name" contenteditable="false"></h1>
+                        <p class="playlist-detail-description" id="playlist-detail-description"></p>
+                        <div class="playlist-detail-meta" id="playlist-detail-meta"></div>
+                        <div class="playlist-detail-actions">
+                            <button id="play-playlist-btn" class="btn btn-primary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                    fill="currentColor">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                                Play All
+                            </button>
+                            <button id="shuffle-playlist-btn" class="btn btn-secondary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <polyline points="16 3 21 3 21 8"></polyline>
+                                    <line x1="4" y1="20" x2="21" y2="3"></line>
+                                    <polyline points="16 16 21 16 21 21"></polyline>
+                                    <line x1="15" y1="15" x2="21" y2="21"></line>
+                                    <line x1="4" y1="4" x2="9" y2="9"></line>
+                                </svg>
+                                Shuffle
+                            </button>
+                            <button id="edit-playlist-btn" class="btn btn-secondary">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                                </svg>
+                                Edit
+                            </button>
+                            <button id="delete-playlist-btn" class="btn btn-secondary" style="color: #ef4444;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                    </path>
+                                </svg>
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </header>
+                <div class="track-list" id="playlist-detail-tracklist"></div>
+                <div class="playlist-empty-state" id="playlist-empty-state" style="display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                    <h4>This playlist is empty</h4>
+                    <p>Search for tracks and add them to this playlist using the context menu.</p>
+                </div>
             </div>
 
             <div id="page-settings" class="page">

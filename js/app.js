@@ -3,6 +3,7 @@ import { apiSettings, userSettings } from './storage.js';
 import { UIRenderer } from './ui.js';
 import { Player } from './player.js';
 import SpotifyAPI from './spotify.js';
+import { PlaylistsUI } from './playlistsUI.js';
 import {
     STREAMING_QUALITY, DOWNLOAD_QUALITY_OPTIONS, REPEAT_MODE, SVG_PLAY, SVG_PAUSE,
     SVG_VOLUME, SVG_MUTE, formatTime, trackDataStore,
@@ -99,6 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'artist':
                 ui.renderArtistPage(param);
                 break;
+            case 'playlist':
+                if (playlistsUI) {
+                    playlistsUI.renderPlaylistPage(param);
+                }
+                break;
             case 'home':
                 ui.renderHomePage();
                 break;
@@ -107,6 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
         }
     };
+
+    // Initialize Playlists UI
+    const playlistsUI = new PlaylistsUI(api, player, showNotification);
 
     const renderQueue = () => {
         const currentQueue = player.getCurrentQueue();
@@ -212,32 +221,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const added = player.addToQueue(contextTrack);
             renderQueue();
 
-            const notification = document.createElement('div');
-            notification.textContent = added
-                ? `✓ Added "${contextTrack.title}" to queue`
-                : `⚠ "${contextTrack.title}" already in queue`;
-            notification.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 3000);
+            if (added) {
+                showNotification(`Added "${contextTrack.title}" to queue`, 'success');
+            } else {
+                showNotification(`"${contextTrack.title}" already in queue`, 'warning');
+            }
+        } else if (action === 'add-to-playlist' && contextTrack) {
+            // Show add to playlist submenu
+            const rect = e.target.getBoundingClientRect();
+            playlistsUI.showAddToPlaylistMenu(contextTrack, rect.right + 5, rect.top);
+            return; // Don't hide context menu yet
         } else if (action === 'download' && contextTrack) {
             const downloadQuality = userSettings.getDownloadQuality();
             const filename = buildTrackFilename(contextTrack, downloadQuality);
 
             try {
-                const tempEl = document.createElement('div');
-                tempEl.textContent = `Downloading: ${contextTrack.title}...`;
-                tempEl.style.cssText = 'position:fixed;bottom:100px;right:20px;background:var(--card);padding:1rem 1.5rem;border-radius:var(--radius);border:1px solid var(--border);z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
-                document.body.appendChild(tempEl);
-
+                showNotification(`Downloading: ${contextTrack.title}...`, 'info');
                 await api.downloadTrack(contextTrack.id, downloadQuality, filename, contextTrack);
-
-                tempEl.textContent = `✓ Downloaded: ${contextTrack.title}`;
-                setTimeout(() => tempEl.remove(), 3000);
+                showNotification(`Downloaded: ${contextTrack.title}`, 'success');
             } catch (error) {
                 const errorMsg = error.message === RATE_LIMIT_ERROR_MESSAGE
                     ? error.message
                     : 'Download failed. Please try again.';
-                alert(errorMsg);
+                showNotification(errorMsg, 'error');
             }
         }
 

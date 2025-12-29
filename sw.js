@@ -1,5 +1,5 @@
 //sw.js
-const CACHE_NAME = 'monochrome-v3';
+const CACHE_NAME = 'monochrome-v4';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -11,6 +11,9 @@ const urlsToCache = [
     '/js/ui.js',
     '/js/utils.js',
     '/js/cache.js',
+    '/js/spotify.js',
+    '/js/playlists.js',
+    '/js/playlistsUI.js',
     '/manifest.json'
 ];
 
