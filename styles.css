@@ -39,27 +39,10 @@ html {
 }
 
 body {
-    /* Dynamic Gradient Background */
-    background: linear-gradient(-45deg, #020202, #1a103c, #0f172a, #000000);
-    background-size: 400% 400%;
-    animation: gradientBG 20s ease infinite;
+    background-color: var(--background);
     color: var(--foreground);
     font-family: 'Inter', sans-serif;
     overflow: hidden;
-}
-
-@keyframes gradientBG {
-    0% {
-        background-position: 0% 50%;
-    }
-
-    50% {
-        background-position: 100% 50%;
-    }
-
-    100% {
-        background-position: 0% 50%;
-    }
 }
 
 /* Permitir selección de texto en inputs y elementos específicos */
@@ -96,8 +79,7 @@ a {
 
 .sidebar {
     grid-area: sidebar;
-    background-color: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(20px);
+    background-color: var(--background);
     border-right: 1px solid var(--border);
     padding: 1.5rem;
     display: flex;
@@ -116,9 +98,8 @@ a {
 
 .now-playing-bar {
     grid-area: player;
-    background-color: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #050505;
+    border-top: 1px solid var(--border);
     padding: var(--spacing-md) var(--spacing-lg);
     display: grid;
     grid-template-columns: 1fr 2fr 1fr;
