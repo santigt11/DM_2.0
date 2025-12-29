@@ -748,6 +748,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     playPauseBtn.innerHTML = SVG_PLAY;
     updateVolumeUI();
+
+
+
+    // Actualizar UI según estado de autenticación
+
+    // Guardar Client ID
+
+    // Conectar
+
+    // Handle Callback (Check code in URL)
+
+    // Importar Playlist
+
+
+
     router();
     window.addEventListener('hashchange', router);
 
