@@ -93,6 +93,17 @@ export const userSettings = {
         const settings = this._get();
         settings.downloadQuality = quality;
         this._save(settings);
+    },
+
+    getSpotifyClientId() {
+        const settings = this._get();
+        return settings.spotifyClientId || '';
+    },
+
+    setSpotifyClientId(clientId) {
+        const settings = this._get();
+        settings.spotifyClientId = clientId;
+        this._save(settings);
     }
 };
 

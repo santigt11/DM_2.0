@@ -3,14 +3,16 @@
  * Docs: https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow
  */
 
+import { userSettings } from './storage.js';
+
 class SpotifyAPI {
     constructor() {
-        this.clientId = ''; // Se configurará desde la UI o config
+        this.clientId = userSettings.getSpotifyClientId();
         this.redirectUri = window.location.origin + '/';
         this.authEndpoint = 'https://accounts.spotify.com/authorize';
         this.tokenEndpoint = 'https://accounts.spotify.com/api/token';
         this.apiBase = 'https://api.spotify.com/v1';
-        
+
         // Scopes necesarios
         this.scopes = [
             'playlist-read-private',
@@ -18,8 +20,12 @@ class SpotifyAPI {
         ];
     }
 
+    setClientId(id) {
+        this.clientId = id;
+    }
+
     // ============= PKCE Helpers =============
-    
+
     generateCodeVerifier(length = 128) {
         const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
         const values = crypto.getRandomValues(new Uint8Array(length));
@@ -44,10 +50,10 @@ class SpotifyAPI {
         // Generar code verifier y challenge
         const codeVerifier = this.generateCodeVerifier();
         const codeChallenge = await this.generateCodeChallenge(codeVerifier);
-        
+
         // Guardar code verifier para usarlo después
         localStorage.setItem('spotify_code_verifier', codeVerifier);
-        
+
         // Construir URL de autorización
         const params = new URLSearchParams({
             client_id: this.clientId,
@@ -57,7 +63,7 @@ class SpotifyAPI {
             code_challenge_method: 'S256',
             code_challenge: codeChallenge
         });
-        
+
         // Redirigir a Spotify
         window.location.href = `${this.authEndpoint}?${params.toString()}`;
     }
@@ -65,16 +71,16 @@ class SpotifyAPI {
     async handleCallback() {
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
-        
+
         if (!code) {
             throw new Error('No authorization code found');
         }
-        
+
         const codeVerifier = localStorage.getItem('spotify_code_verifier');
         if (!codeVerifier) {
             throw new Error('No code verifier found');
         }
-        
+
         // Intercambiar código por tokens
         const payload = {
             method: 'POST',
@@ -89,20 +95,20 @@ class SpotifyAPI {
                 code_verifier: codeVerifier
             })
         };
-        
+
         const response = await fetch(this.tokenEndpoint, payload);
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error_description || 'Failed to get tokens');
         }
-        
+
         // Guardar tokens
         this.saveTokens(data);
-        
+
         // Limpiar code verifier
         localStorage.removeItem('spotify_code_verifier');
-        
+
         return data;
     }
 
@@ -118,11 +124,11 @@ class SpotifyAPI {
 
     async refreshAccessToken() {
         const refreshToken = localStorage.getItem('spotify_refresh_token');
-        
+
         if (!refreshToken) {
             throw new Error('No refresh token available');
         }
-        
+
         const payload = {
             method: 'POST',
             headers: {
@@ -134,30 +140,30 @@ class SpotifyAPI {
                 client_id: this.clientId
             })
         };
-        
+
         const response = await fetch(this.tokenEndpoint, payload);
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error_description || 'Failed to refresh token');
         }
-        
+
         // Guardar nuevos tokens
         this.saveTokens(data);
-        
+
         return data.access_token;
     }
 
     async getValidAccessToken() {
         const accessToken = localStorage.getItem('spotify_access_token');
         const expiresAt = parseInt(localStorage.getItem('spotify_token_expires_at') || '0');
-        
+
         // Si no hay token o está por expirar (dentro de 5 minutos)
         if (!accessToken || Date.now() >= (expiresAt - 5 * 60 * 1000)) {
             console.log('[Spotify] Token expired or missing, refreshing...');
             return await this.refreshAccessToken();
         }
-        
+
         return accessToken;
     }
 
@@ -176,7 +182,7 @@ class SpotifyAPI {
 
     async fetchWithAuth(endpoint, options = {}) {
         const accessToken = await this.getValidAccessToken();
-        
+
         const response = await fetch(`${this.apiBase}${endpoint}`, {
             ...options,
             headers: {
@@ -185,12 +191,12 @@ class SpotifyAPI {
                 ...options.headers
             }
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.error?.message || 'Spotify API error');
         }
-        
+
         return response.json();
     }
 
@@ -227,19 +233,19 @@ class SpotifyAPI {
         if (/^[a-zA-Z0-9]+$/.test(input)) {
             return input;
         }
-        
+
         // URL de Spotify
         const urlMatch = input.match(/playlist\/([a-zA-Z0-9]+)/);
         if (urlMatch) {
             return urlMatch[1];
         }
-        
+
         // URI de Spotify
         const uriMatch = input.match(/spotify:playlist:([a-zA-Z0-9]+)/);
         if (uriMatch) {
             return uriMatch[1];
         }
-        
+
         return null;
     }
 
@@ -250,7 +256,7 @@ class SpotifyAPI {
         return spotifyTracks.map(item => {
             const track = item.track;
             if (!track) return null;
-            
+
             return {
                 title: track.name,
                 artist: track.artists[0]?.name,
