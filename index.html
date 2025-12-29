@@ -513,6 +513,14 @@
                     <div class="title">Select a song</div>
                     <div class="artist"></div>
                 </div>
+                <button id="np-add-to-playlist-btn" class="track-add-to-playlist-btn"
+                    style="opacity:1; margin-left:10px;" title="Add to Playlist">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </button>
                 <canvas id="audio-visualizer" width="60" height="40"></canvas>
             </div>
             <div class="player-controls">
@@ -601,10 +609,16 @@
     <!-- Expanded Player Modal -->
     <div id="expanded-player-modal" class="expanded-player-overlay">
         <div class="expanded-player-content">
-            <button class="expanded-player-close" id="close-expanded-player">
+            <!-- Close button removed as per user request -->
+            <button class="expanded-queue-btn" id="expanded-queue-btn" title="Show Queue">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2">
-                    <polyline points="6 9 12 15 18 9"></polyline>
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
                 </svg>
             </button>
             <div class="expanded-player-artwork">

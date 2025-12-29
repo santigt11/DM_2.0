@@ -207,10 +207,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 r = Math.round(r / count);
                 g = Math.round(g / count);
                 b = Math.round(b / count);
+                console.log('🎨 Color extracted:', { r, g, b });
                 return { r, g, b };
             }
         } catch (e) {
-            // CORS error, use fallback
+            console.error('❌ Error extracting color:', e);
         }
         return null;
     };
@@ -222,6 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 rgba(${r}, ${g}, ${b}, 0.15) 0%, 
                 rgba(0, 0, 0, 1) 100%)`;
             nowPlayingBar.style.borderTopColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+            // Store the last extracted color for use in expanded player
+            window.__lastExtractedColor = color;
         } else {
             nowPlayingBar.style.background = '';
             nowPlayingBar.style.borderTopColor = '';
@@ -322,6 +325,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize Playlists UI
     const playlistsUI = new PlaylistsUI(api, player, showNotification);
+
+    // Global listener for "Add to Playlist" buttons (+)
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.track-add-to-playlist-btn');
+        if (!btn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        let track;
+
+        // Mini player button
+        if (btn.id === 'np-add-to-playlist-btn') {
+            track = player.getCurrentTrack();
+            if (!track) {
+                showNotification('No track playing', 'error');
+                return;
+            }
+        }
+        // Track list button
+        else {
+            const trackEl = btn.closest('.track-item');
+            if (trackEl && trackDataStore.has(trackEl)) {
+                track = trackDataStore.get(trackEl);
+            } else if (trackEl) {
+                // Fallback for playlist items which store data differently or if store is missing
+                // Try getting from dataset if available or reconstruct basic info
+                // But generally dataStore should populate.
+                // In playlist detail, dataStore IS populated in PlaylistsUI.renderPlaylistPage
+            }
+        }
+
+        if (track) {
+            // Adjust position if close to bottom
+            const y = e.clientY > window.innerHeight - 200 ? e.clientY - 200 : e.clientY;
+            playlistsUI.showAddToPlaylistMenu(track, e.clientX, y);
+        }
+    });
 
     const renderQueue = () => {
         const currentQueue = player.getCurrentQueue();
@@ -2009,6 +2050,20 @@ document.addEventListener('DOMContentLoaded', () => {
         expandedShuffleBtn.classList.toggle('active', player.shuffleActive);
         expandedRepeatBtn.classList.toggle('active', player.repeatMode !== REPEAT_MODE.OFF);
 
+        expandedRepeatBtn.classList.toggle('active', player.repeatMode !== REPEAT_MODE.OFF);
+
+        // Set the background image for the blurred effect
+        // We use the high-res cover URL
+        let coverUrl = '';
+        if (currentTrack.album?.cover) {
+            coverUrl = api.getCoverUrl(currentTrack.album.cover, '640');
+        } else {
+            // Fallback or use current src if cached
+            coverUrl = expandedCover.src;
+        }
+
+        expandedPlayerModal.style.setProperty('--expanded-bg-image', `url('${coverUrl}')`);
+
         // Show modal
         expandedPlayerModal.classList.add('active');
         document.body.style.overflow = 'hidden';
@@ -2024,6 +2079,76 @@ document.addEventListener('DOMContentLoaded', () => {
         npCover.style.cursor = 'pointer';
         npCover.addEventListener('click', openExpandedPlayer);
     }
+
+    // Click on song title opens the album
+    const npTitle = document.querySelector('.now-playing-bar .title');
+    if (npTitle) {
+        npTitle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const currentTrack = player.getCurrentTrack();
+            if (currentTrack?.album?.id) {
+                window.location.hash = `#album/${currentTrack.album.id}`;
+            }
+        });
+    }
+
+    // Click on artist name opens the artist page
+    const npArtist = document.querySelector('.now-playing-bar .artist');
+    if (npArtist) {
+        npArtist.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const currentTrack = player.getCurrentTrack();
+            if (currentTrack?.artist?.id) {
+                window.location.hash = `#artist/${currentTrack.artist.id}`;
+            }
+        });
+    }
+
+    // Close button
+    const expandedQueueBtn = document.getElementById('expanded-queue-btn');
+    if (expandedQueueBtn) {
+        expandedQueueBtn.addEventListener('click', () => {
+            renderQueue();
+            queueModalOverlay.style.display = 'flex';
+            // Ensure z-index is correct (handled in CSS)
+        });
+    }
+
+    // --- Touch Gestures for Expanded Player ---
+    let touchStartY = 0;
+    let touchEndY = 0;
+    const MIN_SWIPE_DISTANCE = 50;
+
+    expandedPlayerModal.addEventListener('touchstart', (e) => {
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    expandedPlayerModal.addEventListener('touchend', (e) => {
+        touchEndY = e.changedTouches[0].screenY;
+        handleSwipeGesture();
+    }, { passive: true });
+
+    const handleSwipeGesture = () => {
+        const swipeDistance = touchEndY - touchStartY;
+
+        // Swipe Down (Positive distance) -> Close Player
+        if (swipeDistance > MIN_SWIPE_DISTANCE) {
+            closeExpandedPlayer();
+        }
+
+        // Swipe Up (Negative distance) -> Open Queue
+        if (swipeDistance < -MIN_SWIPE_DISTANCE) {
+            renderQueue();
+            queueModalOverlay.style.display = 'flex';
+        }
+    };
+
+    // Also Close modal if clicked outside content (optional, but good for UX)
+    // expandedPlayerModal.addEventListener('click', (e) => {
+    //    if (e.target === expandedPlayerModal) closeExpandedPlayer();
+    // });
+
+    // --- End Touch Gestures ---
 
     // Close button
     closeExpandedPlayerBtn?.addEventListener('click', closeExpandedPlayer);
