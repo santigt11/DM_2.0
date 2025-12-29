@@ -513,6 +513,7 @@
                     <div class="title">Select a song</div>
                     <div class="artist"></div>
                 </div>
+                <canvas id="audio-visualizer" width="60" height="40"></canvas>
             </div>
             <div class="player-controls">
                 <div class="buttons">
@@ -593,6 +594,76 @@
                     <button id="retry-failed-btn" class="retry-btn">Retry Failed Tracks</button>
                     <button id="copy-failed-btn" class="copy-btn">Copy Track List</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expanded Player Modal -->
+    <div id="expanded-player-modal" class="expanded-player-overlay">
+        <div class="expanded-player-content">
+            <button class="expanded-player-close" id="close-expanded-player">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+            <div class="expanded-player-artwork">
+                <img id="expanded-cover" src="" alt="Album Cover">
+            </div>
+            <div class="expanded-player-info">
+                <h2 id="expanded-title" class="expanded-title"></h2>
+                <p id="expanded-artist" class="expanded-artist"></p>
+                <p id="expanded-album" class="expanded-album"></p>
+            </div>
+            <div class="expanded-player-progress">
+                <div class="expanded-progress-bar" id="expanded-progress-bar">
+                    <div class="expanded-progress-fill" id="expanded-progress-fill"></div>
+                </div>
+                <div class="expanded-time">
+                    <span id="expanded-current-time">0:00</span>
+                    <span id="expanded-duration">0:00</span>
+                </div>
+            </div>
+            <div class="expanded-player-controls">
+                <button id="expanded-shuffle-btn" class="expanded-control-btn" title="Shuffle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2">
+                        <polyline points="16 3 21 3 21 8"></polyline>
+                        <line x1="4" y1="20" x2="21" y2="3"></line>
+                        <polyline points="21 16 21 21 16 21"></polyline>
+                        <line x1="15" y1="15" x2="21" y2="21"></line>
+                        <line x1="4" y1="4" x2="9" y2="9"></line>
+                    </svg>
+                </button>
+                <button id="expanded-prev-btn" class="expanded-control-btn" title="Previous">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                        <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"></line>
+                    </svg>
+                </button>
+                <button id="expanded-play-pause-btn" class="expanded-play-pause-btn" title="Play/Pause">
+                    <svg id="expanded-play-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32"
+                        viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </button>
+                <button id="expanded-next-btn" class="expanded-control-btn" title="Next">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
+                        fill="currentColor">
+                        <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                        <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"></line>
+                    </svg>
+                </button>
+                <button id="expanded-repeat-btn" class="expanded-control-btn" title="Repeat">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2">
+                        <polyline points="17 1 21 5 17 9"></polyline>
+                        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                        <polyline points="7 23 3 19 7 15"></polyline>
+                        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                    </svg>
+                </button>
             </div>
         </div>
     </div>

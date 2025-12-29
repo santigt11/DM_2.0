@@ -19,6 +19,18 @@ export class Player {
         this.quality = quality;
     }
 
+    getCurrentTrack() {
+        const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
+        if (this.currentQueueIndex >= 0 && this.currentQueueIndex < currentQueue.length) {
+            return currentQueue[this.currentQueueIndex];
+        }
+        return null;
+    }
+
+    getCurrentQueue() {
+        return this.shuffleActive ? this.shuffledQueue : this.queue;
+    }
+
     async preloadNextTracks() {
         if (this.preloadAbortController) {
             this.preloadAbortController.abort();
@@ -74,11 +86,40 @@ export class Player {
 
         const track = currentQueue[this.currentQueueIndex];
 
-        document.querySelector('.now-playing-bar .cover').src =
-            this.api.getCoverUrl(track.album?.cover, '160');
-        document.querySelector('.now-playing-bar .title').textContent = track.title;
-        document.querySelector('.now-playing-bar .artist').textContent = track.artist?.name || 'Unknown Artist';
-        document.title = `${track.title} • ${track.artist?.name || 'Unknown'}`;
+        // Get UI elements
+        const coverEl = document.querySelector('.now-playing-bar .cover');
+        const detailsEl = document.querySelector('.now-playing-bar .details');
+        const titleEl = document.querySelector('.now-playing-bar .title');
+        const artistEl = document.querySelector('.now-playing-bar .artist');
+
+        // Add transition classes for smooth fade
+        coverEl.classList.add('transitioning');
+        detailsEl.classList.add('transitioning');
+
+        // Wait for fade out, then update
+        setTimeout(() => {
+            coverEl.src = this.api.getCoverUrl(track.album?.cover, '160');
+            titleEl.textContent = track.title;
+            artistEl.textContent = track.artist?.name || 'Unknown Artist';
+            document.title = `${track.title} • ${track.artist?.name || 'Unknown'}`;
+
+            // Remove transition classes after image loads or timeout
+            coverEl.onload = () => {
+                coverEl.classList.remove('transitioning');
+                detailsEl.classList.remove('transitioning');
+                titleEl.classList.add('animate-in');
+                artistEl.classList.add('animate-in');
+                setTimeout(() => {
+                    titleEl.classList.remove('animate-in');
+                    artistEl.classList.remove('animate-in');
+                }, 300);
+            };
+            // Fallback timeout
+            setTimeout(() => {
+                coverEl.classList.remove('transitioning');
+                detailsEl.classList.remove('transitioning');
+            }, 500);
+        }, 150);
 
         this.updatePlayingTrackIndicator();
         this.updateMediaSession(track);

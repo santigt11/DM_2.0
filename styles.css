@@ -954,22 +954,12 @@ input:checked+.slider:before {
     height: 100%;
     background-color: var(--foreground);
     border-radius: 2px;
+    position: relative;
+    transition: background-color 0.2s ease;
 }
 
 .volume-controls .volume-bar:hover .volume-fill {
     background-color: var(--highlight);
-}
-
-.volume-controls .volume-bar:hover .volume-fill::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
-    background-color: var(--highlight);
-    border-radius: 50%;
 }
 
 #context-menu {
@@ -3272,4 +3262,1181 @@ input:checked+.slider:before {
 .add-to-queue-btn:hover {
     color: var(--highlight);
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================
+   UX & AESTHETIC IMPROVEMENTS
+   ============================================ */
+
+/* --- Ripple Effect --- */
+.ripple-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0);
+    animation: ripple-animation 0.6s ease-out forwards;
+    pointer-events: none;
+}
+
+@keyframes ripple-animation {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+
+/* Apply ripple to interactive elements */
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-icon,
+.card,
+.track-item,
+.nav-item a,
+.search-tab,
+.player-controls .buttons button,
+.volume-controls button,
+#context-menu li,
+.playlist-card,
+.sidebar-playlist-item {
+    position: relative;
+    overflow: hidden;
+}
+
+/* --- Enhanced Skeleton Loading with Shimmer --- */
+.skeleton {
+    background: linear-gradient(90deg,
+            var(--secondary) 0%,
+            var(--muted) 50%,
+            var(--secondary) 100%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius);
+}
+
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.skeleton-track {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius);
+}
+
+.skeleton-track-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.skeleton-track-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.skeleton-track-title {
+    height: 16px;
+    width: 60%;
+    min-width: 120px;
+}
+
+.skeleton-track-artist {
+    height: 12px;
+    width: 40%;
+    min-width: 80px;
+}
+
+.skeleton-track-duration {
+    height: 14px;
+    width: 40px;
+}
+
+.skeleton-card {
+    background-color: var(--card);
+    border-radius: var(--radius);
+    padding: 1rem;
+}
+
+.skeleton-card-image {
+    width: 100%;
+    aspect-ratio: 1/1;
+    margin-bottom: 1rem;
+}
+
+.skeleton-card.artist .skeleton-card-image {
+    border-radius: 50%;
+}
+
+.skeleton-card-title {
+    height: 18px;
+    width: 80%;
+    margin-bottom: 0.5rem;
+}
+
+.skeleton-card-subtitle {
+    height: 14px;
+    width: 60%;
+}
+
+.skeleton-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* --- Page Transitions --- */
+.page {
+    display: none;
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.page.active {
+    display: block;
+    animation: page-enter 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes page-enter {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Staggered animation for cards */
+.card-grid .card,
+.playlists-grid .playlist-card {
+    opacity: 0;
+    animation: card-stagger 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.card-grid .card:nth-child(1) {
+    animation-delay: 0.05s;
+}
+
+.card-grid .card:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.card-grid .card:nth-child(3) {
+    animation-delay: 0.15s;
+}
+
+.card-grid .card:nth-child(4) {
+    animation-delay: 0.2s;
+}
+
+.card-grid .card:nth-child(5) {
+    animation-delay: 0.25s;
+}
+
+.card-grid .card:nth-child(6) {
+    animation-delay: 0.3s;
+}
+
+.card-grid .card:nth-child(n+7) {
+    animation-delay: 0.35s;
+}
+
+@keyframes card-stagger {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Staggered animation for track items */
+.track-list .track-item {
+    opacity: 0;
+    animation: track-stagger 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.track-list .track-item:nth-child(1) {
+    animation-delay: 0.02s;
+}
+
+.track-list .track-item:nth-child(2) {
+    animation-delay: 0.04s;
+}
+
+.track-list .track-item:nth-child(3) {
+    animation-delay: 0.06s;
+}
+
+.track-list .track-item:nth-child(4) {
+    animation-delay: 0.08s;
+}
+
+.track-list .track-item:nth-child(5) {
+    animation-delay: 0.1s;
+}
+
+.track-list .track-item:nth-child(n+6) {
+    animation-delay: 0.12s;
+}
+
+@keyframes track-stagger {
+    from {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* --- Enhanced Micro-animations --- */
+
+/* Card hover improvements */
+.card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, box-shadow;
+}
+
+.card:hover {
+    background-color: var(--secondary);
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.card:active {
+    transform: translateY(-2px) scale(1.01);
+    transition-duration: 0.1s;
+}
+
+.card-image {
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover .card-image {
+    transform: scale(1.05);
+}
+
+/* Track item hover improvements */
+.track-item {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.track-item:hover {
+    background-color: var(--secondary);
+    transform: translateX(4px);
+}
+
+.track-item:active {
+    background-color: var(--muted);
+    transform: translateX(2px);
+}
+
+/* Button press animations */
+.btn {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, box-shadow;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.btn:active {
+    transform: translateY(0) scale(0.98);
+    transition-duration: 0.1s;
+}
+
+.btn-primary:hover {
+    background-color: #fff;
+    box-shadow: 0 8px 30px rgba(255, 255, 255, 0.25);
+}
+
+/* Icon button pulse on hover */
+.btn-icon {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-icon:hover {
+    background-color: var(--secondary);
+    color: var(--foreground);
+    transform: scale(1.1);
+}
+
+.btn-icon:active {
+    transform: scale(0.95);
+}
+
+/* Play/Pause button glow effect */
+.player-controls .buttons .play-pause-btn {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+}
+
+.player-controls .buttons .play-pause-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.player-controls .buttons .play-pause-btn:active {
+    transform: scale(1.05);
+}
+
+/* --- Enhanced Now Playing Bar --- */
+.now-playing-bar {
+    background: linear-gradient(180deg, rgba(10, 10, 10, 0.95) 0%, rgba(0, 0, 0, 1) 100%);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.track-info .cover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.track-info .cover:hover {
+    transform: scale(1.08);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+}
+
+/* --- Progress bar improvements --- */
+.progress-bar {
+    transition: height 0.2s ease;
+}
+
+.progress-bar:hover {
+    height: 6px;
+}
+
+.progress-bar .progress-fill {
+    transition: width 0.1s linear, background-color 0.2s ease;
+}
+
+.progress-bar:hover .progress-fill {
+    background: linear-gradient(90deg, var(--foreground), var(--highlight));
+}
+
+/* --- Volume bar improvements --- */
+.volume-bar {
+    transition: background-color 0.2s ease;
+}
+
+.volume-bar:hover .volume-fill {
+    background: linear-gradient(90deg, var(--foreground), var(--highlight));
+}
+
+/* Volume knob on hover */
+.volume-bar .volume-fill::after {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    width: 12px;
+    height: 12px;
+    background-color: var(--foreground);
+    border-radius: 50%;
+    transition: transform 0.15s ease;
+    pointer-events: none;
+}
+
+.volume-bar:hover .volume-fill::after {
+    transform: translateY(-50%) scale(1);
+    background-color: var(--highlight);
+}
+
+/* Volume bar dragging state */
+.volume-bar.dragging {
+    cursor: grabbing;
+}
+
+.volume-bar.dragging .volume-fill {
+    background: linear-gradient(90deg, var(--foreground), var(--highlight));
+}
+
+.volume-bar.dragging .volume-fill::after {
+    transform: translateY(-50%) scale(1.2);
+    background-color: var(--highlight);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+/* Also apply same styles to progress bar for consistency */
+.progress-bar {
+    cursor: pointer;
+}
+
+.progress-bar .progress-fill {
+    position: relative;
+}
+
+.progress-bar .progress-fill::after {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    width: 12px;
+    height: 12px;
+    background-color: var(--foreground);
+    border-radius: 50%;
+    transition: transform 0.15s ease;
+    pointer-events: none;
+}
+
+.progress-bar:hover .progress-fill::after {
+    transform: translateY(-50%) scale(1);
+    background-color: var(--highlight);
+}
+
+/* Progress bar dragging state */
+.progress-bar.dragging {
+    cursor: grabbing;
+}
+
+.progress-bar.dragging .progress-fill {
+    background: linear-gradient(90deg, var(--foreground), var(--highlight));
+}
+
+.progress-bar.dragging .progress-fill::after {
+    transform: translateY(-50%) scale(1.2);
+    background-color: var(--highlight);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+/* --- Play/Pause Button Animation --- */
+.play-pause-btn {
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.play-pause-btn:active {
+    transform: scale(0.9) !important;
+}
+
+.play-pause-btn svg {
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.play-pause-btn.animate svg {
+    animation: playPausePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes playPausePop {
+    0% {
+        transform: scale(0.5);
+        opacity: 0.5;
+    }
+
+    50% {
+        transform: scale(1.2);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* --- Modal improvements --- */
+#queue-modal,
+#spotify-modal,
+#playlists-modal {
+    animation: modal-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes modal-enter {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+#queue-modal-overlay,
+#spotify-modal-overlay,
+#playlists-modal-overlay {
+    animation: overlay-fade 0.25s ease forwards;
+}
+
+@keyframes overlay-fade {
+    from {
+        opacity: 0;
+        backdrop-filter: blur(0px);
+    }
+
+    to {
+        opacity: 1;
+        backdrop-filter: blur(8px);
+    }
+}
+
+/* --- Context menu improvements --- */
+#context-menu {
+    animation: context-menu-enter 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    backdrop-filter: blur(20px);
+    background-color: rgba(17, 17, 17, 0.95);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+@keyframes context-menu-enter {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+#context-menu li {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#context-menu li:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding-left: 1.25rem;
+}
+
+/* --- Search input focus animation --- */
+.search-bar input {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+}
+
+.search-bar input:focus {
+    border-color: var(--foreground);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3);
+    background-color: rgba(39, 39, 42, 0.8);
+}
+
+/* --- Sidebar navigation improvements --- */
+.sidebar-nav .nav-item a {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-nav .nav-item a:hover {
+    background-color: var(--secondary);
+    color: var(--foreground);
+    transform: translateX(4px);
+}
+
+.sidebar-nav .nav-item a.active {
+    background: linear-gradient(135deg, var(--primary), rgba(255, 255, 255, 0.9));
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+}
+
+/* --- Sidebar playlist items --- */
+.sidebar-playlist-item {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-playlist-item:hover {
+    background-color: var(--secondary);
+    transform: translateX(4px);
+}
+
+/* --- Notification toast improvements --- */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+}
+
+/* --- Detail header image loading --- */
+.detail-header-image {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.detail-header-image.loading {
+    opacity: 0;
+    transform: scale(0.95);
+}
+
+.detail-header-image:not(.loading) {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* --- Queue drag visual improvements --- */
+.track-item.dragging {
+    opacity: 0.6;
+    transform: scale(1.02);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+.track-item.drag-over {
+    border-top: 2px solid var(--highlight);
+    padding-top: calc(var(--spacing-sm) - 2px);
+}
+
+/* --- Shuffle/Repeat active state glow --- */
+#shuffle-btn.active,
+#repeat-btn.active,
+#shuffle-queue-btn.active {
+    color: var(--highlight);
+    text-shadow: 0 0 10px var(--highlight);
+}
+
+#shuffle-btn.active svg,
+#repeat-btn.active svg,
+#shuffle-queue-btn.active svg {
+    filter: drop-shadow(0 0 6px var(--highlight));
+}
+
+/* --- Loading state for images --- */
+img {
+    transition: opacity 0.3s ease;
+}
+
+img[src=""],
+img:not([src]) {
+    opacity: 0;
+}
+
+/* --- Focus visible styles for accessibility --- */
+:focus-visible {
+    outline: 2px solid var(--highlight);
+    outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--highlight);
+    outline-offset: 2px;
+}
+
+/* --- Scrollbar styling --- */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--secondary);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+}
+
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--secondary) transparent;
+}
+
+/* --- Glow effect for currently playing track --- */
+.track-item.playing {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.05) 0%,
+            transparent 50%);
+    border-left: 3px solid var(--highlight);
+    padding-left: calc(var(--spacing-sm) - 3px);
+}
+
+/* --- Enhanced explicit badge --- */
+.explicit-badge {
+    transition: all 0.2s ease;
+}
+
+.track-item:hover .explicit-badge,
+.card:hover .explicit-badge {
+    background-color: #ff4444;
+    transform: scale(1.1);
+}
+
+/* --- Smooth image loading --- */
+.card-image,
+.track-item-cover,
+.track-info .cover {
+    background: linear-gradient(135deg, var(--secondary) 0%, var(--muted) 100%);
+}
+
+/* --- Glass morphism for some elements --- */
+.search-bar input:focus,
+#context-menu,
+.add-to-playlist-menu {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+/* --- Notification Toast Styling --- */
+.notification-toast {
+    font-family: 'Inter', sans-serif;
+    max-width: 350px;
+    word-wrap: break-word;
+}
+
+.notification-toast::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+/* --- Pulse animation for loading states --- */
+@keyframes subtle-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.loading-state {
+    animation: subtle-pulse 1.5s ease-in-out infinite;
+}
+
+/* --- Hover glow for primary actions --- */
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.btn-primary:hover::before {
+    opacity: 1;
+}
+
+/* --- Smooth transitions for all interactive elements --- */
+button,
+a,
+input,
+select,
+.card,
+.track-item {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* --- Empty States --- */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    text-align: center;
+    animation: emptyStateFadeIn 0.4s ease;
+}
+
+@keyframes emptyStateFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.empty-state-icon {
+    color: var(--muted-foreground);
+    opacity: 0.5;
+    margin-bottom: 1rem;
+    animation: emptyStateFloat 3s ease-in-out infinite;
+}
+
+@keyframes emptyStateFloat {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.empty-state-icon svg {
+    width: 64px;
+    height: 64px;
+}
+
+.empty-state-text {
+    color: var(--muted-foreground);
+    font-size: 0.95rem;
+    max-width: 300px;
+    line-height: 1.5;
+}
+
+.empty-state.loading .empty-state-icon {
+    animation: emptyStatePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes emptyStatePulse {
+
+    0%,
+    100% {
+        opacity: 0.5;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+}
+
+/* Track preview tooltip animation */
+.track-preview-tooltip {
+    animation: tooltipFadeIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Audio Visualizer --- */
+#audio-visualizer {
+    margin-left: 0.75rem;
+    opacity: 0.3;
+    transition: opacity 0.3s ease;
+    border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+    #audio-visualizer {
+        display: none;
+    }
+}
+
+/* --- Expanded Player Modal --- */
+.expanded-player-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(40px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
+}
+
+.expanded-player-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.expanded-player-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem;
+    max-width: 420px;
+    width: 100%;
+    transform: translateY(40px) scale(0.95);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.expanded-player-overlay.active .expanded-player-content {
+    transform: translateY(0) scale(1);
+}
+
+.expanded-player-close {
+    position: absolute;
+    top: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    padding: 0.75rem 2rem;
+    border-radius: 30px;
+    transition: all 0.2s ease;
+}
+
+.expanded-player-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--foreground);
+}
+
+.expanded-player-artwork {
+    width: 280px;
+    height: 280px;
+    margin-bottom: 2rem;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    position: relative;
+}
+
+.expanded-player-artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.expanded-player-artwork:hover img {
+    transform: scale(1.02);
+}
+
+.expanded-player-info {
+    text-align: center;
+    margin-bottom: 2rem;
+    width: 100%;
+}
+
+.expanded-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.expanded-artist {
+    font-size: 1.1rem;
+    color: var(--muted-foreground);
+    margin-bottom: 0.25rem;
+}
+
+.expanded-album {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.expanded-player-progress {
+    width: 100%;
+    margin-bottom: 2rem;
+}
+
+.expanded-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--secondary);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.expanded-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--foreground), var(--highlight));
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.1s linear;
+    position: relative;
+}
+
+.expanded-progress-fill::after {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    background: var(--foreground);
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.expanded-time {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--muted-foreground);
+}
+
+.expanded-player-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+}
+
+.expanded-control-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    padding: 0.75rem;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.expanded-control-btn:hover {
+    color: var(--foreground);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.expanded-control-btn.active {
+    color: var(--highlight);
+}
+
+.expanded-play-pause-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--foreground);
+    color: var(--background);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.expanded-play-pause-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.2);
+}
+
+.expanded-play-pause-btn:active {
+    transform: scale(0.95);
+}
+
+/* --- Track Transition Animation --- */
+.now-playing-bar .cover {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.now-playing-bar .cover.transitioning {
+    opacity: 0.3;
+    transform: scale(0.95);
+}
+
+.now-playing-bar .details {
+    transition: opacity 0.3s ease;
+}
+
+.now-playing-bar .details.transitioning {
+    opacity: 0.3;
+}
+
+/* Track info fade animation */
+@keyframes trackInfoFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.now-playing-bar .title.animate-in,
+.now-playing-bar .artist.animate-in {
+    animation: trackInfoFadeIn 0.3s ease forwards;
+}
+
+/* Mobile responsive for expanded player */
+@media (max-width: 480px) {
+    .expanded-player-artwork {
+        width: 240px;
+        height: 240px;
+    }
+
+    .expanded-title {
+        font-size: 1.25rem;
+    }
+
+    .expanded-player-controls {
+        gap: 1rem;
+    }
+
+    .expanded-play-pause-btn {
+        width: 64px;
+        height: 64px;
+    }
 }

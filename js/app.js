@@ -44,6 +44,212 @@ document.addEventListener('DOMContentLoaded', () => {
     let contextTrack = null;
     let currentAlbumTracks = [];
 
+    // Audio Visualizer Setup - Uses CSS animation fallback if Web Audio fails
+    const visualizerCanvas = document.getElementById('audio-visualizer');
+    const visualizerCtx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
+    let audioContext = null;
+    let analyser = null;
+    let dataArray = null;
+    let animationId = null;
+    let isVisualizerConnected = false;
+    let visualizerFailed = false;
+
+    const initVisualizer = () => {
+        // Web Audio API causes CORS issues with external audio streams
+        // Always use CSS fallback instead
+        visualizerFailed = true;
+    };
+
+    const drawVisualizer = () => {
+        if (!analyser || !visualizerCtx || visualizerFailed) return;
+
+        animationId = requestAnimationFrame(drawVisualizer);
+
+        try {
+            analyser.getByteFrequencyData(dataArray);
+
+            const width = visualizerCanvas.width;
+            const height = visualizerCanvas.height;
+            const barCount = 8;
+            const barWidth = width / barCount - 2;
+            const gap = 2;
+
+            visualizerCtx.clearRect(0, 0, width, height);
+
+            for (let i = 0; i < barCount; i++) {
+                const dataIndex = Math.floor(i * dataArray.length / barCount);
+                const value = dataArray[dataIndex] / 255;
+                const barHeight = Math.max(2, value * height);
+
+                const x = i * (barWidth + gap);
+                const y = height - barHeight;
+
+                // Gradient from white to accent color
+                const gradient = visualizerCtx.createLinearGradient(x, height, x, y);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0.9)');
+
+                visualizerCtx.fillStyle = gradient;
+                visualizerCtx.beginPath();
+                visualizerCtx.roundRect(x, y, barWidth, barHeight, 2);
+                visualizerCtx.fill();
+            }
+        } catch (e) {
+            // If we get an error during drawing, stop the visualizer
+            console.warn('Visualizer error:', e.message);
+            stopVisualizer();
+            visualizerFailed = true;
+        }
+    };
+
+    const drawCssFallback = (isPlaying) => {
+        if (!visualizerCtx) return;
+
+        const width = visualizerCanvas.width;
+        const height = visualizerCanvas.height;
+        const barCount = 8;
+        const barWidth = width / barCount - 2;
+
+        visualizerCtx.clearRect(0, 0, width, height);
+
+        for (let i = 0; i < barCount; i++) {
+            const x = i * (barWidth + 2);
+            // Random heights for visual effect when playing
+            const barHeight = isPlaying
+                ? Math.max(4, Math.random() * height * 0.8)
+                : 4;
+            const y = height - barHeight;
+
+            visualizerCtx.fillStyle = isPlaying
+                ? 'rgba(255, 255, 255, 0.7)'
+                : 'rgba(255, 255, 255, 0.2)';
+            visualizerCtx.beginPath();
+            visualizerCtx.roundRect(x, y, barWidth, barHeight, 2);
+            visualizerCtx.fill();
+        }
+    };
+
+    let cssFallbackInterval = null;
+
+    const startVisualizer = () => {
+        if (visualizerFailed) {
+            // Use CSS animation fallback
+            if (cssFallbackInterval) clearInterval(cssFallbackInterval);
+            cssFallbackInterval = setInterval(() => drawCssFallback(true), 100);
+            if (visualizerCanvas) visualizerCanvas.style.opacity = '1';
+            return;
+        }
+
+        if (!isVisualizerConnected) {
+            initVisualizer();
+        }
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+        if (!animationId && isVisualizerConnected) {
+            drawVisualizer();
+        }
+        if (visualizerCanvas) visualizerCanvas.style.opacity = '1';
+    };
+
+    const stopVisualizer = () => {
+        if (cssFallbackInterval) {
+            clearInterval(cssFallbackInterval);
+            cssFallbackInterval = null;
+            drawCssFallback(false);
+        }
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+        if (visualizerCanvas) visualizerCanvas.style.opacity = '0.3';
+        // Draw idle state
+        drawCssFallback(false);
+    };
+
+    audioPlayer.addEventListener('play', () => startVisualizer());
+    audioPlayer.addEventListener('pause', () => stopVisualizer());
+    audioPlayer.addEventListener('ended', () => stopVisualizer());
+
+    // Dynamic Color Extraction from Album Art
+    const nowPlayingBar = document.querySelector('.now-playing-bar');
+    const coverElement = document.querySelector('.now-playing-bar .cover');
+
+    const extractDominantColor = (img) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 50;
+        canvas.height = 50;
+
+        try {
+            ctx.drawImage(img, 0, 0, 50, 50);
+            const imageData = ctx.getImageData(0, 0, 50, 50).data;
+
+            let r = 0, g = 0, b = 0, count = 0;
+
+            // Sample pixels to find average color
+            for (let i = 0; i < imageData.length; i += 16) { // Sample every 4th pixel
+                const pr = imageData[i];
+                const pg = imageData[i + 1];
+                const pb = imageData[i + 2];
+
+                // Skip very dark or very light pixels
+                const brightness = (pr + pg + pb) / 3;
+                if (brightness > 30 && brightness < 220) {
+                    r += pr;
+                    g += pg;
+                    b += pb;
+                    count++;
+                }
+            }
+
+            if (count > 0) {
+                r = Math.round(r / count);
+                g = Math.round(g / count);
+                b = Math.round(b / count);
+                return { r, g, b };
+            }
+        } catch (e) {
+            // CORS error, use fallback
+        }
+        return null;
+    };
+
+    const applyDynamicColor = (color) => {
+        if (color) {
+            const { r, g, b } = color;
+            nowPlayingBar.style.background = `linear-gradient(180deg, 
+                rgba(${r}, ${g}, ${b}, 0.15) 0%, 
+                rgba(0, 0, 0, 1) 100%)`;
+            nowPlayingBar.style.borderTopColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+        } else {
+            nowPlayingBar.style.background = '';
+            nowPlayingBar.style.borderTopColor = '';
+        }
+    };
+
+    // Listen for cover image changes
+    const coverObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    const color = extractDominantColor(img);
+                    applyDynamicColor(color);
+                };
+                img.onerror = () => {
+                    applyDynamicColor(null);
+                };
+                img.src = coverElement.src;
+            }
+        });
+    });
+
+    if (coverElement) {
+        coverObserver.observe(coverElement, { attributes: true, attributeFilter: ['src'] });
+    }
+
     // Función para mostrar notificaciones
     function showNotification(message, type = 'info') {
         const notification = document.createElement('div');
@@ -328,13 +534,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Helper function to animate play/pause button
+    const animatePlayPauseBtn = () => {
+        playPauseBtn.classList.add('animate');
+        setTimeout(() => playPauseBtn.classList.remove('animate'), 300);
+    };
+
     audioPlayer.addEventListener('play', () => {
         playPauseBtn.innerHTML = SVG_PAUSE;
+        animatePlayPauseBtn();
         player.updateMediaSessionPlaybackState();
     });
 
     audioPlayer.addEventListener('pause', () => {
         playPauseBtn.innerHTML = SVG_PLAY;
+        animatePlayPauseBtn();
         player.updateMediaSessionPlaybackState();
     });
 
@@ -361,47 +575,153 @@ document.addEventListener('DOMContentLoaded', () => {
         playPauseBtn.innerHTML = SVG_PLAY;
     });
 
-    let isSeeking = false;
+    // Progress bar drag functionality
+    let isProgressDragging = false;
     let wasPlaying = false;
 
-    const seek = (bar, fill, event, setter) => {
-        const rect = bar.getBoundingClientRect();
-        const position = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-        setter(position);
+    const updateProgress = (e) => {
+        const rect = progressBar.getBoundingClientRect();
+        const position = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+
+        // Update visual immediately
+        progressFill.style.width = `${position * 100}%`;
+
+        // Update time display
+        if (!isNaN(audioPlayer.duration)) {
+            currentTimeEl.textContent = formatTime(position * audioPlayer.duration);
+        }
+
+        return position;
     };
 
-    progressBar.addEventListener('mousedown', () => {
-        isSeeking = true;
+    progressBar.addEventListener('mousedown', (e) => {
+        isProgressDragging = true;
         wasPlaying = !audioPlayer.paused;
         if (wasPlaying) audioPlayer.pause();
+        progressBar.classList.add('dragging');
+        updateProgress(e);
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (isProgressDragging) {
+            updateProgress(e);
+        }
     });
 
     document.addEventListener('mouseup', (e) => {
-        if (isSeeking) {
-            seek(progressBar, progressFill, e, position => {
-                if (!isNaN(audioPlayer.duration)) {
-                    audioPlayer.currentTime = position * audioPlayer.duration;
-                    if (wasPlaying) audioPlayer.play();
-                }
-            });
-            isSeeking = false;
+        if (isProgressDragging) {
+            const position = updateProgress(e);
+            if (!isNaN(audioPlayer.duration)) {
+                audioPlayer.currentTime = position * audioPlayer.duration;
+                if (wasPlaying) audioPlayer.play();
+            }
+            isProgressDragging = false;
+            progressBar.classList.remove('dragging');
         }
     });
 
-    progressBar.addEventListener('click', e => {
-        if (!isSeeking) {
-            seek(progressBar, progressFill, e, position => {
-                if (!isNaN(audioPlayer.duration)) {
-                    audioPlayer.currentTime = position * audioPlayer.duration;
-                }
-            });
+    // Touch support for progress bar
+    progressBar.addEventListener('touchstart', (e) => {
+        isProgressDragging = true;
+        wasPlaying = !audioPlayer.paused;
+        if (wasPlaying) audioPlayer.pause();
+        progressBar.classList.add('dragging');
+        const touch = e.touches[0];
+        const rect = progressBar.getBoundingClientRect();
+        const position = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+        progressFill.style.width = `${position * 100}%`;
+        if (!isNaN(audioPlayer.duration)) {
+            currentTimeEl.textContent = formatTime(position * audioPlayer.duration);
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (isProgressDragging) {
+            const touch = e.touches[0];
+            const rect = progressBar.getBoundingClientRect();
+            const position = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+            progressFill.style.width = `${position * 100}%`;
+            if (!isNaN(audioPlayer.duration)) {
+                currentTimeEl.textContent = formatTime(position * audioPlayer.duration);
+            }
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+        if (isProgressDragging) {
+            const rect = progressBar.getBoundingClientRect();
+            // Use the last touch position
+            const lastPosition = parseFloat(progressFill.style.width) / 100;
+            if (!isNaN(audioPlayer.duration)) {
+                audioPlayer.currentTime = lastPosition * audioPlayer.duration;
+                if (wasPlaying) audioPlayer.play();
+            }
+            isProgressDragging = false;
+            progressBar.classList.remove('dragging');
         }
     });
 
-    volumeBar.addEventListener('click', e => {
-        seek(volumeBar, volumeFill, e, position => {
+    // Volume bar drag functionality
+    let isVolumeDragging = false;
+
+    const updateVolume = (e) => {
+        const rect = volumeBar.getBoundingClientRect();
+        const position = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        audioPlayer.volume = position;
+        // Unmute if user is adjusting volume
+        if (audioPlayer.muted && position > 0) {
+            audioPlayer.muted = false;
+        }
+    };
+
+    volumeBar.addEventListener('mousedown', (e) => {
+        isVolumeDragging = true;
+        volumeBar.classList.add('dragging');
+        updateVolume(e);
+        e.preventDefault(); // Prevent text selection
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (isVolumeDragging) {
+            updateVolume(e);
+        }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+        if (isVolumeDragging) {
+            isVolumeDragging = false;
+            volumeBar.classList.remove('dragging');
+        }
+    });
+
+    // Touch support for mobile
+    volumeBar.addEventListener('touchstart', (e) => {
+        isVolumeDragging = true;
+        volumeBar.classList.add('dragging');
+        const touch = e.touches[0];
+        const rect = volumeBar.getBoundingClientRect();
+        const position = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+        audioPlayer.volume = position;
+        if (audioPlayer.muted && position > 0) {
+            audioPlayer.muted = false;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (isVolumeDragging) {
+            const touch = e.touches[0];
+            const rect = volumeBar.getBoundingClientRect();
+            const position = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
             audioPlayer.volume = position;
-        });
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+        if (isVolumeDragging) {
+            isVolumeDragging = false;
+            volumeBar.classList.remove('dragging');
+        }
     });
 
     const updateVolumeUI = () => {
@@ -419,6 +739,78 @@ document.addEventListener('DOMContentLoaded', () => {
     playPauseBtn.addEventListener('click', () => player.handlePlayPause());
     nextBtn.addEventListener('click', () => player.playNext());
     prevBtn.addEventListener('click', () => player.playPrev());
+
+    // Track preview tooltips for next/prev buttons
+    const createPreviewTooltip = () => {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'track-preview-tooltip';
+        tooltip.style.cssText = `
+            position: fixed;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0.75rem;
+            display: none;
+            z-index: 9999;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            backdrop-filter: blur(20px);
+            min-width: 200px;
+            max-width: 280px;
+            pointer-events: none;
+        `;
+        document.body.appendChild(tooltip);
+        return tooltip;
+    };
+
+    const previewTooltip = createPreviewTooltip();
+
+    const showTrackPreview = (button, track, label) => {
+        if (!track) {
+            previewTooltip.style.display = 'none';
+            return;
+        }
+
+        const coverUrl = api.getCoverUrl(track.album?.cover, '80');
+        previewTooltip.innerHTML = `
+            <div style="font-size: 0.7rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">${label}</div>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <img src="${coverUrl}" alt="" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover;">
+                <div style="overflow: hidden;">
+                    <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${track.title}</div>
+                    <div style="font-size: 0.8rem; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${track.artist?.name || 'Unknown'}</div>
+                </div>
+            </div>
+        `;
+
+        const rect = button.getBoundingClientRect();
+        previewTooltip.style.display = 'block';
+        previewTooltip.style.left = `${rect.left + rect.width / 2 - previewTooltip.offsetWidth / 2}px`;
+        previewTooltip.style.top = `${rect.top - previewTooltip.offsetHeight - 8}px`;
+    };
+
+    const hideTrackPreview = () => {
+        previewTooltip.style.display = 'none';
+    };
+
+    nextBtn.addEventListener('mouseenter', () => {
+        const queue = player.getCurrentQueue();
+        const nextIndex = player.currentQueueIndex + 1;
+        if (nextIndex < queue.length) {
+            showTrackPreview(nextBtn, queue[nextIndex], 'Next up');
+        }
+    });
+
+    nextBtn.addEventListener('mouseleave', hideTrackPreview);
+
+    prevBtn.addEventListener('mouseenter', () => {
+        const queue = player.getCurrentQueue();
+        const prevIndex = player.currentQueueIndex - 1;
+        if (prevIndex >= 0) {
+            showTrackPreview(prevBtn, queue[prevIndex], 'Previous');
+        }
+    });
+
+    prevBtn.addEventListener('mouseleave', hideTrackPreview);
 
     shuffleBtn.addEventListener('click', () => {
         player.toggleShuffle();
@@ -1406,4 +1798,335 @@ document.addEventListener('DOMContentLoaded', () => {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // ============= UX IMPROVEMENTS =============
+
+    // --- Ripple Effect System ---
+    function createRipple(event) {
+        const element = event.currentTarget;
+
+        // Don't create ripple if element is disabled
+        if (element.disabled) return;
+
+        // Remove any existing ripple
+        const existingRipple = element.querySelector('.ripple');
+        if (existingRipple) {
+            existingRipple.remove();
+        }
+
+        const ripple = document.createElement('span');
+        ripple.classList.add('ripple');
+
+        const rect = element.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const x = event.clientX - rect.left - size / 2;
+        const y = event.clientY - rect.top - size / 2;
+
+        ripple.style.width = ripple.style.height = `${size}px`;
+        ripple.style.left = `${x}px`;
+        ripple.style.top = `${y}px`;
+
+        element.appendChild(ripple);
+
+        // Remove ripple after animation
+        ripple.addEventListener('animationend', () => {
+            ripple.remove();
+        });
+    }
+
+    // Apply ripple to interactive elements
+    const rippleSelectors = [
+        '.btn',
+        '.btn-primary',
+        '.btn-secondary',
+        '.btn-icon',
+        '.player-controls .buttons button',
+        '.volume-controls button',
+        '#context-menu li',
+        '.search-tab',
+        '.nav-item a'
+    ];
+
+    document.addEventListener('click', (e) => {
+        const target = e.target.closest(rippleSelectors.join(', '));
+        if (target) {
+            createRipple(e);
+        }
+    });
+
+    // --- Enhanced Image Loading ---
+    function setupImageLoading() {
+        // Add loading class to detail images
+        const detailImages = document.querySelectorAll('.detail-header-image');
+        detailImages.forEach(img => {
+            if (!img.complete) {
+                img.classList.add('loading');
+                img.addEventListener('load', () => {
+                    img.classList.remove('loading');
+                }, { once: true });
+                img.addEventListener('error', () => {
+                    img.classList.remove('loading');
+                }, { once: true });
+            }
+        });
+    }
+
+    // Run on initial load and after route changes
+    setupImageLoading();
+    window.addEventListener('hashchange', () => {
+        requestAnimationFrame(() => {
+            setupImageLoading();
+        });
+    });
+
+    // --- Smooth notification animations ---
+    window.showNotification = (message, type = 'info') => {
+        const notification = document.createElement('div');
+        notification.className = 'notification-toast';
+        notification.textContent = message;
+
+        const backgroundColor = type === 'success' ? '#16a34a' :
+            type === 'error' ? '#dc2626' :
+                type === 'warning' ? '#ca8a04' :
+                    'var(--card)';
+
+        notification.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: ${backgroundColor};
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius);
+            z-index: 9999;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            animation: slideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            font-weight: 500;
+        `;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease forwards';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    };
+
+    // --- Cover image hover effect (click to expand) ---
+    const nowPlayingCover = document.querySelector('.track-info .cover');
+    if (nowPlayingCover) {
+        nowPlayingCover.addEventListener('click', () => {
+            const currentTrack = player.getCurrentQueue()[player.currentQueueIndex];
+            if (currentTrack?.album?.id) {
+                window.location.hash = `#album/${currentTrack.album.id}`;
+            }
+        });
+    }
+
+    // --- Keyboard shortcuts ---
+    document.addEventListener('keydown', (e) => {
+        // Don't trigger if typing in an input
+        if (e.target.matches('input, textarea, [contenteditable]')) return;
+
+        switch (e.code) {
+            case 'Space':
+                e.preventDefault();
+                player.handlePlayPause();
+                break;
+            case 'ArrowRight':
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    player.playNext();
+                }
+                break;
+            case 'ArrowLeft':
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    player.playPrev();
+                }
+                break;
+            case 'KeyM':
+                e.preventDefault();
+                audioPlayer.muted = !audioPlayer.muted;
+                break;
+        }
+    });
+
+    console.log('✨ UX improvements loaded');
+
+    // === EXPANDED PLAYER ===
+    const expandedPlayerModal = document.getElementById('expanded-player-modal');
+    const closeExpandedPlayerBtn = document.getElementById('close-expanded-player');
+    const expandedCover = document.getElementById('expanded-cover');
+    const expandedTitle = document.getElementById('expanded-title');
+    const expandedArtist = document.getElementById('expanded-artist');
+    const expandedAlbum = document.getElementById('expanded-album');
+    const expandedProgressBar = document.getElementById('expanded-progress-bar');
+    const expandedProgressFill = document.getElementById('expanded-progress-fill');
+    const expandedCurrentTime = document.getElementById('expanded-current-time');
+    const expandedDuration = document.getElementById('expanded-duration');
+    const expandedPlayPauseBtn = document.getElementById('expanded-play-pause-btn');
+    const expandedPlayIcon = document.getElementById('expanded-play-icon');
+    const expandedShuffleBtn = document.getElementById('expanded-shuffle-btn');
+    const expandedRepeatBtn = document.getElementById('expanded-repeat-btn');
+    const expandedNextBtn = document.getElementById('expanded-next-btn');
+    const expandedPrevBtn = document.getElementById('expanded-prev-btn');
+    const npCover = document.querySelector('.now-playing-bar .cover');
+
+    const SVG_EXPANDED_PLAY = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+    const SVG_EXPANDED_PAUSE = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+
+    const openExpandedPlayer = () => {
+        const currentTrack = player.getCurrentTrack();
+        if (!currentTrack) return;
+
+        // Update expanded player info - use the same cover from now-playing bar but with higher resolution
+        const nowPlayingCoverSrc = document.querySelector('.now-playing-bar .cover')?.src;
+        // Replace the size in the URL (e.g., 160x160 -> 640x640)
+        if (nowPlayingCoverSrc) {
+            expandedCover.src = nowPlayingCoverSrc.replace(/\/\d+x\d+\.jpg/, '/640x640.jpg');
+        } else {
+            expandedCover.src = api.getCoverUrl(currentTrack.album?.cover, '640');
+        }
+        expandedTitle.textContent = currentTrack.title;
+        expandedArtist.textContent = currentTrack.artist?.name || 'Unknown Artist';
+        expandedAlbum.textContent = currentTrack.album?.title || '';
+
+        // Update progress
+        const { currentTime, duration } = audioPlayer;
+        if (duration) {
+            expandedProgressFill.style.width = `${(currentTime / duration) * 100}%`;
+            expandedCurrentTime.textContent = formatTime(currentTime);
+            expandedDuration.textContent = formatTime(duration);
+        }
+
+        // Update play/pause icon
+        expandedPlayPauseBtn.innerHTML = audioPlayer.paused ? SVG_EXPANDED_PLAY : SVG_EXPANDED_PAUSE;
+
+        // Update shuffle/repeat states
+        expandedShuffleBtn.classList.toggle('active', player.shuffleActive);
+        expandedRepeatBtn.classList.toggle('active', player.repeatMode !== REPEAT_MODE.OFF);
+
+        // Show modal
+        expandedPlayerModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    };
+
+    const closeExpandedPlayer = () => {
+        expandedPlayerModal.classList.remove('active');
+        document.body.style.overflow = '';
+    };
+
+    // Open expanded player when clicking on cover art
+    if (npCover) {
+        npCover.style.cursor = 'pointer';
+        npCover.addEventListener('click', openExpandedPlayer);
+    }
+
+    // Close button
+    closeExpandedPlayerBtn?.addEventListener('click', closeExpandedPlayer);
+
+    // Close on overlay click
+    expandedPlayerModal?.addEventListener('click', (e) => {
+        if (e.target === expandedPlayerModal) {
+            closeExpandedPlayer();
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && expandedPlayerModal?.classList.contains('active')) {
+            closeExpandedPlayer();
+        }
+    });
+
+    // Expanded player controls
+    expandedPlayPauseBtn?.addEventListener('click', () => {
+        player.handlePlayPause();
+    });
+
+    expandedNextBtn?.addEventListener('click', () => {
+        player.playNext();
+    });
+
+    expandedPrevBtn?.addEventListener('click', () => {
+        player.playPrev();
+    });
+
+    expandedShuffleBtn?.addEventListener('click', () => {
+        player.toggleShuffle();
+        expandedShuffleBtn.classList.toggle('active', player.shuffleActive);
+        shuffleBtn.classList.toggle('active', player.shuffleActive);
+    });
+
+    expandedRepeatBtn?.addEventListener('click', () => {
+        const mode = player.toggleRepeat();
+        expandedRepeatBtn.classList.toggle('active', mode !== REPEAT_MODE.OFF);
+        repeatBtn.classList.toggle('active', mode !== REPEAT_MODE.OFF);
+    });
+
+    // Update expanded player during playback
+    audioPlayer.addEventListener('timeupdate', () => {
+        if (!expandedPlayerModal?.classList.contains('active')) return;
+
+
+
+        const { currentTime, duration } = audioPlayer;
+        if (duration) {
+            expandedProgressFill.style.width = `${(currentTime / duration) * 100}%`;
+            expandedCurrentTime.textContent = formatTime(currentTime);
+            expandedDuration.textContent = formatTime(duration);
+        }
+    });
+
+    // Sync play/pause state
+    audioPlayer.addEventListener('play', () => {
+        if (expandedPlayPauseBtn) {
+            expandedPlayPauseBtn.innerHTML = SVG_EXPANDED_PAUSE;
+        }
+    });
+
+    audioPlayer.addEventListener('pause', () => {
+        if (expandedPlayPauseBtn) {
+            expandedPlayPauseBtn.innerHTML = SVG_EXPANDED_PLAY;
+        }
+    });
+
+    // Update expanded player when track changes
+    const originalPlayTrackFromQueue = player.playTrackFromQueue.bind(player);
+    player.playTrackFromQueue = async function () {
+        await originalPlayTrackFromQueue();
+
+        // Update expanded player if open
+        if (expandedPlayerModal?.classList.contains('active')) {
+            const currentTrack = player.getCurrentTrack();
+            if (currentTrack) {
+                // Get cover from now-playing bar with higher resolution
+                setTimeout(() => {
+                    const coverSrc = document.querySelector('.now-playing-bar .cover')?.src;
+                    if (coverSrc) {
+                        expandedCover.src = coverSrc.replace(/\/\d+x\d+\.jpg/, '/640x640.jpg');
+                    } else {
+                        expandedCover.src = api.getCoverUrl(currentTrack.album?.cover, '640');
+                    }
+                }, 200); // Wait for now-playing bar to update
+                expandedTitle.textContent = currentTrack.title;
+                expandedArtist.textContent = currentTrack.artist?.name || 'Unknown Artist';
+                expandedAlbum.textContent = currentTrack.album?.title || '';
+            }
+        }
+    };
+
+    // Seek in expanded progress bar
+    expandedProgressBar?.addEventListener('click', (e) => {
+        const rect = expandedProgressBar.getBoundingClientRect();
+        const position = (e.clientX - rect.left) / rect.width;
+        if (!isNaN(audioPlayer.duration)) {
+            audioPlayer.currentTime = position * audioPlayer.duration;
+        }
+    });
+
+    console.log('🎵 Expanded player loaded');
 });
