@@ -67,17 +67,15 @@ export class LosslessAPI {
             const url = baseUrl.endsWith('/') ? `${baseUrl}${relativePath.substring(1)}` : `${baseUrl}${relativePath}`;
 
             try {
+                console.log(`[API] Attempt ${attempt}/${maxTotalAttempts}: ${baseUrl} (${relativePath})`);
                 const response = await fetch(url, { signal: options.signal });
 
                 if (response.status === 429) {
                     console.warn(`Rate limit hit on ${baseUrl}. Trying next instance...`);
                     instanceIndex++;
-                    await delay(500); // Small delay before trying next instance
+                    await delay(500);
                     continue;
                 }
-
-                try {
-                    console.log(`[API] Attempt ${attemptCount}/${maxTotalAttempts}: ${baseUrl} (${relativePath})`);
 
                 if (response.status === 401) {
                     let errorData = await response.clone().json();
@@ -86,11 +84,16 @@ export class LosslessAPI {
                         instanceIndex++;
                         continue;
                     }
+                }
 
                 if (response.status >= 500) {
                     console.warn(`Server error ${response.status} on ${baseUrl}. Trying next instance...`);
                     instanceIndex++;
                     continue;
+                }
+
+                if (response.ok) {
+                    return response;
                 }
 
                 lastError = new Error(`Request failed with status ${response.status}`);
@@ -491,8 +494,7 @@ export class LosslessAPI {
             }
         }
 
-        // Extraer tracks
-        const tracks = (tracksSection?.items || []).map(i => this.prepareTrack(i.item || i));
+
 
         // If album exists but has no artist, try to extract from tracks
         if (!album.artist && tracksSection?.items && tracksSection.items.length > 0) {
@@ -1159,86 +1161,86 @@ export class LosslessAPI {
             let streamUrl;
             let blob;
 
-        // Si la calidad solicitada no está en la lista de fallback, empezar con ella
-        const qualitiesToTry = quality !== 'LOSSLESS' && quality !== 'HIGH' && quality !== 'LOW'
-            ? [quality, ...qualityPriority]
-            : qualityPriority;
+            // Si la calidad solicitada no está en la lista de fallback, empezar con ella
+            const qualitiesToTry = quality !== 'LOSSLESS' && quality !== 'HIGH' && quality !== 'LOW'
+                ? [quality, ...qualityPriority]
+                : qualityPriority;
 
-        for (const currentQuality of qualitiesToTry) {
-            try {
-                console.log(`[DOWNLOAD] Attempting download for track ${id} at quality ${currentQuality}`);
-                const lookup = await this.getTrack(id, currentQuality);
-                console.log(`[DOWNLOAD] Track lookup result:`, lookup);
+            for (const currentQuality of qualitiesToTry) {
+                try {
+                    console.log(`[DOWNLOAD] Attempting download for track ${id} at quality ${currentQuality}`);
+                    const lookup = await this.getTrack(id, currentQuality);
+                    console.log(`[DOWNLOAD] Track lookup result:`, lookup);
 
-                let streamUrl;
+                    let streamUrl;
 
-                if (lookup.originalTrackUrl) {
-                    streamUrl = lookup.originalTrackUrl;
-                    console.log(`[DOWNLOAD] Using original track URL: ${streamUrl}`);
-                } else {
-                    streamUrl = this.extractStreamUrlFromManifest(lookup.info.manifest);
-                    console.log(`[DOWNLOAD] Extracted stream URL from manifest: ${streamUrl}`);
-                    if (!streamUrl) {
-                        throw new Error('Could not resolve stream URL');
+                    if (lookup.originalTrackUrl) {
+                        streamUrl = lookup.originalTrackUrl;
+                        console.log(`[DOWNLOAD] Using original track URL: ${streamUrl}`);
+                    } else {
+                        streamUrl = this.extractStreamUrlFromManifest(lookup.info.manifest);
+                        console.log(`[DOWNLOAD] Extracted stream URL from manifest: ${streamUrl}`);
+                        if (!streamUrl) {
+                            throw new Error('Could not resolve stream URL');
+                        }
                     }
-                }
 
-                // Intentar usar servidor de metadatos (solo en producción)
-                const isLocalhost = window.location.hostname === 'localhost' ||
-                    window.location.hostname === '127.0.0.1' ||
-                    window.location.hostname === '';
+                    // Intentar usar servidor de metadatos (solo en producción)
+                    const isLocalhost = window.location.hostname === 'localhost' ||
+                        window.location.hostname === '127.0.0.1' ||
+                        window.location.hostname === '';
 
-                if (trackMetadata && !isLocalhost) {
-                    console.log(`[DOWNLOAD] Using download server with metadata`);
-                    try {
-                        await this._downloadWithMetadata(streamUrl, filename, trackMetadata, currentQuality);
-                        console.log(`[DOWNLOAD] Successfully downloaded with metadata: ${filename}`);
-                        return;
-                    } catch (error) {
-                        console.warn(`[DOWNLOAD] Metadata server failed, falling back to direct download:`, error.message);
-                        // Continuar con descarga directa
+                    if (trackMetadata && !isLocalhost) {
+                        console.log(`[DOWNLOAD] Using download server with metadata`);
+                        try {
+                            await this._downloadWithMetadata(streamUrl, filename, trackMetadata, currentQuality);
+                            console.log(`[DOWNLOAD] Successfully downloaded with metadata: ${filename}`);
+                            return;
+                        } catch (error) {
+                            console.warn(`[DOWNLOAD] Metadata server failed, falling back to direct download:`, error.message);
+                            // Continuar con descarga directa
+                        }
+                    } else if (isLocalhost && trackMetadata) {
+                        console.log(`[DOWNLOAD] Localhost detected - skipping metadata server, using direct download`);
                     }
-                } else if (isLocalhost && trackMetadata) {
-                    console.log(`[DOWNLOAD] Localhost detected - skipping metadata server, using direct download`);
+
+                    // Descarga directa sin metadatos (fallback)
+                    console.log(`[DOWNLOAD] Using direct download (no metadata)`);
+                    const response = await fetch(streamUrl, { cache: 'no-store' });
+
+                    if (!response.ok) {
+                        console.error(`[DOWNLOAD] Fetch failed with status: ${response.status} ${response.statusText}`);
+                        throw new Error(`Fetch failed: ${response.status}`);
+                    }
+
+                    console.log(`[DOWNLOAD] Converting to blob...`);
+                    const blob = await response.blob();
+                    console.log(`[DOWNLOAD] Blob size: ${blob.size} bytes, type: ${blob.type}`);
+
+                    const url = URL.createObjectURL(blob);
+
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+
+                    // Delay before cleanup to ensure Android browsers process the download
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    document.body.removeChild(a);
+
+                    // Additional delay before revoking URL to prevent Android download failures
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    URL.revokeObjectURL(url);
+
+                    console.log(`[DOWNLOAD] Successfully downloaded: ${filename} at quality ${currentQuality}`);
+                    return; // Éxito, salir de la función
+                } catch (error) {
+                    console.warn(`[DOWNLOAD] Failed with quality ${currentQuality}:`, error.message);
+                    lastError = error;
+                    // Continuar con la siguiente calidad
                 }
-
-                // Descarga directa sin metadatos (fallback)
-                console.log(`[DOWNLOAD] Using direct download (no metadata)`);
-                const response = await fetch(streamUrl, { cache: 'no-store' });
-
-                if (!response.ok) {
-                    console.error(`[DOWNLOAD] Fetch failed with status: ${response.status} ${response.statusText}`);
-                    throw new Error(`Fetch failed: ${response.status}`);
-                }
-
-                console.log(`[DOWNLOAD] Converting to blob...`);
-                const blob = await response.blob();
-                console.log(`[DOWNLOAD] Blob size: ${blob.size} bytes, type: ${blob.type}`);
-
-                const url = URL.createObjectURL(blob);
-
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-
-                // Delay before cleanup to ensure Android browsers process the download
-                await new Promise(resolve => setTimeout(resolve, 100));
-                document.body.removeChild(a);
-
-                // Additional delay before revoking URL to prevent Android download failures
-                await new Promise(resolve => setTimeout(resolve, 200));
-                URL.revokeObjectURL(url);
-
-                console.log(`[DOWNLOAD] Successfully downloaded: ${filename} at quality ${currentQuality}`);
-                return; // Éxito, salir de la función
-            } catch (error) {
-                console.warn(`[DOWNLOAD] Failed with quality ${currentQuality}:`, error.message);
-                lastError = error;
-                // Continuar con la siguiente calidad
             }
-        }
 
             // Handle DASH streams (blob URLs)
             if (streamUrl.startsWith('blob:')) {
