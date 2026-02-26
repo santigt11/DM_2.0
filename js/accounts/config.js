@@ -11,12 +11,12 @@ let provider = null;
 const STORAGE_KEY = 'monochrome-firebase-config';
 
 const DEFAULT_CONFIG = {
-    apiKey: 'AIzaSyDPU-unAjuLtQJt4IkGS5faG50UCF7lYyA',
-    authDomain: 'monochrome-database.firebaseapp.com',
-    projectId: 'monochrome-database',
-    storageBucket: 'monochrome-database.firebasestorage.app',
-    messagingSenderId: '895657412760',
-    appId: '1:895657412760:web:e81c5044c7f4e9b799e8ed',
+    apiKey: 'AIzaSyB9TlwtpatK3wk8E2EHqh1zzGjw9xv9SKE',
+    authDomain: 'dm-music-5581d.firebaseapp.com',
+    projectId: 'dm-music-5581d',
+    storageBucket: 'dm-music-5581d.firebasestorage.app',
+    messagingSenderId: '984953163321',
+    appId: '1:984953163321:web:68c7a0858ac537798d87e8',
 };
 
 function getStoredConfig() {
