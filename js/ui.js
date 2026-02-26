@@ -652,7 +652,7 @@ export class UIRenderer {
         });
     }
 
-    createSkeletonTrack() {
+    createSkeletonTrack(showCover = false) {
         return `
             <div class="skeleton-track">
                 ${showCover ? '<div class="skeleton skeleton-track-cover"></div>' : '<div class="skeleton skeleton-track-number"></div>'}
