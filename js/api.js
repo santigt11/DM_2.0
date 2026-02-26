@@ -254,9 +254,12 @@ export class LosslessAPI {
 
             if (!track && 'duration' in entry) {
                 track = entry;
-                info = entry;
+                // Only set info from this entry if it also has manifest
+                if ('manifest' in entry) {
+                    info = entry;
+                }
                 originalTrackUrl = entry.OriginalTrackUrl || entry.originalTrackUrl || entry.url;
-                break; // Ya tenemos todo
+                // Don't break — continue looking for manifest/OriginalTrackUrl in other entries
             }
 
             if (!info && 'manifest' in entry) {
@@ -268,6 +271,14 @@ export class LosslessAPI {
                 if (typeof candidate === 'string') {
                     originalTrackUrl = candidate;
                 }
+            }
+
+            // Also check for originalTrackUrl (lowercase) and url fields
+            if (!originalTrackUrl && entry.originalTrackUrl && typeof entry.originalTrackUrl === 'string') {
+                originalTrackUrl = entry.originalTrackUrl;
+            }
+            if (!originalTrackUrl && entry.url && typeof entry.url === 'string') {
+                originalTrackUrl = entry.url;
             }
         }
 
