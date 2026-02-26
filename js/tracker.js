@@ -2,6 +2,18 @@
 import { escapeHtml, SVG_MENU, SVG_PLAY, trackDataStore, formatTime, SVG_HEART } from './utils.js';
 import { navigate } from './router.js';
 
+// Helper to route external requests through our CORS proxy on Vercel
+function proxyFetch(url, options = {}) {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalhost) {
+        // In local dev, try direct fetch (may work if CORS isn't enforced)
+        return fetch(url, options);
+    }
+    // On deployed Vercel, use the proxy endpoint
+    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+    return fetch(proxyUrl, options);
+}
+
 let artistsData = [];
 let artistsPopularity = new Map(); // name -> popularity score
 let globalPlayer = null;
@@ -30,7 +42,7 @@ function cleanSongTitle(title) {
 
 async function loadArtistsPopularity() {
     try {
-        const response = await fetch('https://trends.artistgrid.cx');
+        const response = await proxyFetch('https://trends.artistgrid.cx');
         if (!response.ok) return;
         const data = await response.json();
         if (data.results) {
@@ -47,7 +59,7 @@ async function loadArtistsPopularity() {
 
 async function loadArtistsData() {
     try {
-        const response = await fetch('https://sheets.artistgrid.cx/artists.ndjson');
+        const response = await proxyFetch('https://sheets.artistgrid.cx/artists.ndjson');
         if (!response.ok) throw new Error('Network response was not ok');
         const text = await response.text();
         artistsData = text
@@ -91,7 +103,7 @@ function getSheetId(url) {
 
 async function fetchTrackerData(sheetId) {
     try {
-        const response = await fetch(`https://tracker.israeli.ovh/get/${sheetId}`);
+        const response = await proxyFetch(`https://tracker.israeli.ovh/get/${sheetId}`);
         if (!response.ok) return null;
         return await response.json();
     } catch (e) {
