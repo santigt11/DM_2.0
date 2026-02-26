@@ -20,7 +20,7 @@ export const PlaylistManager = {
 
     /**
      * Guardar todas las playlists
-     * @param {Array} playlists 
+     * @param {Array} playlists
      */
     _saveAll(playlists) {
         try {
@@ -54,7 +54,7 @@ export const PlaylistManager = {
             tracks: [],
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            coverUrl: null // Se puede extraer del primer track
+            coverUrl: null, // Se puede extraer del primer track
         };
 
         playlists.unshift(newPlaylist);
@@ -65,23 +65,23 @@ export const PlaylistManager = {
 
     /**
      * Obtener playlist por ID
-     * @param {string} id 
+     * @param {string} id
      * @returns {Object|null}
      */
     getById(id) {
         const playlists = this.getAll();
-        return playlists.find(p => p.id === id) || null;
+        return playlists.find((p) => p.id === id) || null;
     },
 
     /**
      * Actualizar nombre/descripción de playlist
-     * @param {string} id 
+     * @param {string} id
      * @param {Object} updates - { name?, description? }
      * @returns {Object|null}
      */
     update(id, updates) {
         const playlists = this.getAll();
-        const index = playlists.findIndex(p => p.id === id);
+        const index = playlists.findIndex((p) => p.id === id);
 
         if (index === -1) return null;
 
@@ -100,12 +100,12 @@ export const PlaylistManager = {
 
     /**
      * Eliminar playlist
-     * @param {string} id 
+     * @param {string} id
      * @returns {boolean}
      */
     delete(id) {
         const playlists = this.getAll();
-        const index = playlists.findIndex(p => p.id === id);
+        const index = playlists.findIndex((p) => p.id === id);
 
         if (index === -1) return false;
 
@@ -117,18 +117,18 @@ export const PlaylistManager = {
 
     /**
      * Agregar track a playlist
-     * @param {string} playlistId 
+     * @param {string} playlistId
      * @param {Object} track - Track object
      * @returns {boolean}
      */
     addTrack(playlistId, track) {
         const playlists = this.getAll();
-        const playlist = playlists.find(p => p.id === playlistId);
+        const playlist = playlists.find((p) => p.id === playlistId);
 
         if (!playlist) return false;
 
         // Verificar si ya existe
-        const exists = playlist.tracks.some(t => t.id === track.id);
+        const exists = playlist.tracks.some((t) => t.id === track.id);
         if (exists) return false;
 
         // Crear copia limpia del track para almacenar
@@ -139,14 +139,14 @@ export const PlaylistManager = {
             trackNumber: track.trackNumber,
             artist: {
                 id: track.artist?.id,
-                name: track.artist?.name
+                name: track.artist?.name,
             },
             album: {
                 id: track.album?.id,
                 title: track.album?.title,
-                cover: track.album?.cover
+                cover: track.album?.cover,
             },
-            explicit: track.explicit
+            explicit: track.explicit,
         };
 
         playlist.tracks.push(trackData);
@@ -163,8 +163,8 @@ export const PlaylistManager = {
 
     /**
      * Agregar múltiples tracks a playlist
-     * @param {string} playlistId 
-     * @param {Array} tracks 
+     * @param {string} playlistId
+     * @param {Array} tracks
      * @returns {number} Cantidad agregada
      */
     addTracks(playlistId, tracks) {
@@ -179,13 +179,13 @@ export const PlaylistManager = {
 
     /**
      * Remover track de playlist
-     * @param {string} playlistId 
+     * @param {string} playlistId
      * @param {number} trackIndex - Índice del track
      * @returns {boolean}
      */
     removeTrack(playlistId, trackIndex) {
         const playlists = this.getAll();
-        const playlist = playlists.find(p => p.id === playlistId);
+        const playlist = playlists.find((p) => p.id === playlistId);
 
         if (!playlist || trackIndex < 0 || trackIndex >= playlist.tracks.length) {
             return false;
@@ -207,14 +207,14 @@ export const PlaylistManager = {
 
     /**
      * Mover track dentro de playlist
-     * @param {string} playlistId 
-     * @param {number} fromIndex 
-     * @param {number} toIndex 
+     * @param {string} playlistId
+     * @param {number} fromIndex
+     * @param {number} toIndex
      * @returns {boolean}
      */
     moveTrack(playlistId, fromIndex, toIndex) {
         const playlists = this.getAll();
-        const playlist = playlists.find(p => p.id === playlistId);
+        const playlist = playlists.find((p) => p.id === playlistId);
 
         if (!playlist) return false;
         if (fromIndex < 0 || fromIndex >= playlist.tracks.length) return false;
@@ -230,7 +230,7 @@ export const PlaylistManager = {
 
     /**
      * Duplicar playlist
-     * @param {string} id 
+     * @param {string} id
      * @returns {Object|null}
      */
     duplicate(id) {
@@ -245,7 +245,7 @@ export const PlaylistManager = {
             name: `${original.name} (Copy)`,
             tracks: [...original.tracks],
             createdAt: Date.now(),
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
         };
 
         playlists.unshift(newPlaylist);
@@ -256,7 +256,7 @@ export const PlaylistManager = {
 
     /**
      * Exportar playlist a JSON
-     * @param {string} id 
+     * @param {string} id
      * @returns {string|null}
      */
     export(id) {
@@ -268,7 +268,7 @@ export const PlaylistManager = {
 
     /**
      * Importar playlist desde JSON
-     * @param {string} jsonString 
+     * @param {string} jsonString
      * @returns {Object|null}
      */
     import(jsonString) {
@@ -288,7 +288,7 @@ export const PlaylistManager = {
                 tracks: data.tracks,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
-                coverUrl: data.coverUrl || (data.tracks[0]?.album?.cover || null)
+                coverUrl: data.coverUrl || data.tracks[0]?.album?.cover || null,
             };
 
             playlists.unshift(newPlaylist);
@@ -312,9 +312,9 @@ export const PlaylistManager = {
         return {
             playlistCount: playlists.length,
             totalTracks,
-            averageTracksPerPlaylist: playlists.length ? Math.round(totalTracks / playlists.length) : 0
+            averageTracksPerPlaylist: playlists.length ? Math.round(totalTracks / playlists.length) : 0,
         };
-    }
+    },
 };
 
 export default PlaylistManager;

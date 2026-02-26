@@ -271,26 +271,32 @@ export class PlaylistsUI {
         // Render playlists in menu
         const playlists = PlaylistManager.getAll();
 
-        this.addToPlaylistList.innerHTML = playlists.length === 0
-            ? '<div class="add-to-playlist-menu-item" style="color: var(--muted-foreground); cursor: default;">No playlists yet</div>'
-            : playlists.map(p => `
+        this.addToPlaylistList.innerHTML =
+            playlists.length === 0
+                ? '<div class="add-to-playlist-menu-item" style="color: var(--muted-foreground); cursor: default;">No playlists yet</div>'
+                : playlists
+                      .map(
+                          (p) => `
                 <div class="add-to-playlist-menu-item" data-playlist-id="${p.id}">
-                    ${p.coverUrl
-                    ? `<img src="${this.api.getCoverUrl(p.coverUrl, '80')}" alt="">`
-                    : `<div class="placeholder-cover">
+                    ${
+                        p.coverUrl
+                            ? `<img src="${this.api.getCoverUrl(p.coverUrl, '80')}" alt="">`
+                            : `<div class="placeholder-cover">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M9 18V5l12-2v13"></path>
                                 <circle cx="6" cy="18" r="3"></circle>
                                 <circle cx="18" cy="16" r="3"></circle>
                             </svg>
                         </div>`
-                }
+                    }
                     <span>${this.escapeHtml(p.name)}</span>
                 </div>
-            `).join('');
+            `
+                      )
+                      .join('');
 
         // Add click handlers
-        this.addToPlaylistList.querySelectorAll('[data-playlist-id]').forEach(item => {
+        this.addToPlaylistList.querySelectorAll('[data-playlist-id]').forEach((item) => {
             item.addEventListener('click', () => {
                 const playlistId = item.dataset.playlistId;
                 this.addTrackToPlaylist(playlistId, this.pendingTrackToAdd);
@@ -368,27 +374,33 @@ export class PlaylistsUI {
             return;
         }
 
-        this.sidebarPlaylistsList.innerHTML = playlists.slice(0, 10).map(p => `
+        this.sidebarPlaylistsList.innerHTML = playlists
+            .slice(0, 10)
+            .map(
+                (p) => `
             <div class="sidebar-playlist-item" data-playlist-id="${p.id}">
-                ${p.coverUrl
-                ? `<img src="${this.api.getCoverUrl(p.coverUrl, '80')}" class="sidebar-playlist-cover" alt="">`
-                : `<div class="sidebar-playlist-cover placeholder">
+                ${
+                    p.coverUrl
+                        ? `<img src="${this.api.getCoverUrl(p.coverUrl, '80')}" class="sidebar-playlist-cover" alt="">`
+                        : `<div class="sidebar-playlist-cover placeholder">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 18V5l12-2v13"></path>
                             <circle cx="6" cy="18" r="3"></circle>
                             <circle cx="18" cy="16" r="3"></circle>
                         </svg>
                     </div>`
-            }
+                }
                 <div class="sidebar-playlist-info">
                     <div class="sidebar-playlist-name">${this.escapeHtml(p.name)}</div>
                     <div class="sidebar-playlist-count">${p.tracks.length} tracks</div>
                 </div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
 
         // Add click handlers
-        this.sidebarPlaylistsList.querySelectorAll('.sidebar-playlist-item').forEach(item => {
+        this.sidebarPlaylistsList.querySelectorAll('.sidebar-playlist-item').forEach((item) => {
             item.addEventListener('click', () => {
                 const playlistId = item.dataset.playlistId;
                 window.location.hash = `#playlist/${playlistId}`;
@@ -414,7 +426,9 @@ export class PlaylistsUI {
             return;
         }
 
-        this.playlistsGrid.innerHTML = playlists.map(p => `
+        this.playlistsGrid.innerHTML = playlists
+            .map(
+                (p) => `
             <div class="playlist-card" data-playlist-id="${p.id}">
                 <div class="playlist-card-actions">
                     <button class="playlist-card-action-btn" data-action="play" data-playlist-id="${p.id}" title="Play">
@@ -430,19 +444,22 @@ export class PlaylistsUI {
                     </button>
                 </div>
                 <div class="playlist-card-cover">
-                    ${p.coverUrl
-                ? `<img src="${this.api.getCoverUrl(p.coverUrl, '320')}" alt="">`
-                : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    ${
+                        p.coverUrl
+                            ? `<img src="${this.api.getCoverUrl(p.coverUrl, '320')}" alt="">`
+                            : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M9 18V5l12-2v13"></path>
                             <circle cx="6" cy="18" r="3"></circle>
                             <circle cx="18" cy="16" r="3"></circle>
                         </svg>`
-            }
+                    }
                 </div>
                 <div class="playlist-card-name">${this.escapeHtml(p.name)}</div>
                 <div class="playlist-card-count">${p.tracks.length} tracks</div>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     renderPlaylistPage(playlistId) {
@@ -455,7 +472,7 @@ export class PlaylistsUI {
         }
 
         // Show page
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.page').forEach((p) => p.classList.remove('active'));
         document.getElementById('page-playlist').classList.add('active');
 
         // Update cover
@@ -486,7 +503,9 @@ export class PlaylistsUI {
             this.playlistEmptyState.style.display = 'flex';
         } else {
             this.playlistEmptyState.style.display = 'none';
-            this.playlistDetailTracklist.innerHTML = playlist.tracks.map((track, index) => `
+            this.playlistDetailTracklist.innerHTML = playlist.tracks
+                .map(
+                    (track, index) => `
                 <div class="track-item" data-index="${index}" data-track-id="${track.id}">
                     <div class="track-number">
                         <span class="number">${index + 1}</span>
@@ -531,7 +550,9 @@ export class PlaylistsUI {
                     </div>
                     <div class="track-item-duration">${formatTime(track.duration || 0)}</div>
                 </div>
-            `).join('');
+            `
+                )
+                .join('');
 
             // Re-attach trackDataStore
             this.playlistDetailTracklist.querySelectorAll('.track-item').forEach((el, index) => {

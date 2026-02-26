@@ -14,10 +14,7 @@ class SpotifyAPI {
         this.apiBase = 'https://api.spotify.com/v1';
 
         // Scopes necesarios
-        this.scopes = [
-            'playlist-read-private',
-            'playlist-read-collaborative'
-        ];
+        this.scopes = ['playlist-read-private', 'playlist-read-collaborative'];
     }
 
     setClientId(id) {
@@ -30,7 +27,7 @@ class SpotifyAPI {
         const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
         const values = crypto.getRandomValues(new Uint8Array(length));
         return Array.from(values)
-            .map(x => possible[x % possible.length])
+            .map((x) => possible[x % possible.length])
             .join('');
     }
 
@@ -61,7 +58,7 @@ class SpotifyAPI {
             redirect_uri: this.redirectUri,
             scope: this.scopes.join(' '),
             code_challenge_method: 'S256',
-            code_challenge: codeChallenge
+            code_challenge: codeChallenge,
         });
 
         // Redirigir a Spotify
@@ -85,15 +82,15 @@ class SpotifyAPI {
         const payload = {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: new URLSearchParams({
                 client_id: this.clientId,
                 grant_type: 'authorization_code',
                 code: code,
                 redirect_uri: this.redirectUri,
-                code_verifier: codeVerifier
-            })
+                code_verifier: codeVerifier,
+            }),
         };
 
         const response = await fetch(this.tokenEndpoint, payload);
@@ -118,7 +115,7 @@ class SpotifyAPI {
             localStorage.setItem('spotify_refresh_token', data.refresh_token);
         }
         // Guardar timestamp de expiración (expires_in es en segundos)
-        const expiresAt = Date.now() + (data.expires_in * 1000);
+        const expiresAt = Date.now() + data.expires_in * 1000;
         localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
     }
 
@@ -132,13 +129,13 @@ class SpotifyAPI {
         const payload = {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: new URLSearchParams({
                 grant_type: 'refresh_token',
                 refresh_token: refreshToken,
-                client_id: this.clientId
-            })
+                client_id: this.clientId,
+            }),
         };
 
         const response = await fetch(this.tokenEndpoint, payload);
@@ -159,7 +156,7 @@ class SpotifyAPI {
         const expiresAt = parseInt(localStorage.getItem('spotify_token_expires_at') || '0');
 
         // Si no hay token o está por expirar (dentro de 5 minutos)
-        if (!accessToken || Date.now() >= (expiresAt - 5 * 60 * 1000)) {
+        if (!accessToken || Date.now() >= expiresAt - 5 * 60 * 1000) {
             console.log('[Spotify] Token expired or missing, refreshing...');
             return await this.refreshAccessToken();
         }
@@ -186,10 +183,10 @@ class SpotifyAPI {
         const response = await fetch(`${this.apiBase}${endpoint}`, {
             ...options,
             headers: {
-                'Authorization': `Bearer ${accessToken}`,
+                Authorization: `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
-                ...options.headers
-            }
+                ...options.headers,
+            },
         });
 
         if (!response.ok) {
@@ -212,7 +209,7 @@ class SpotifyAPI {
         const params = new URLSearchParams({
             q: query,
             type: 'playlist',
-            limit: limit.toString()
+            limit: limit.toString(),
         });
         return this.fetchWithAuth(`/search?${params.toString()}`);
     }
@@ -253,21 +250,23 @@ class SpotifyAPI {
      * Convertir tracks de Spotify a formato compatible con la app
      */
     convertSpotifyTracksToTidal(spotifyTracks) {
-        return spotifyTracks.map(item => {
-            const track = item.track;
-            if (!track) return null;
+        return spotifyTracks
+            .map((item) => {
+                const track = item.track;
+                if (!track) return null;
 
-            return {
-                title: track.name,
-                artist: track.artists[0]?.name,
-                artists: track.artists.map(a => a.name).join(', '),
-                album: track.album?.name,
-                duration: Math.floor(track.duration_ms / 1000),
-                isrc: track.external_ids?.isrc, // Útil para buscar en TIDAL
-                spotifyId: track.id,
-                spotifyUri: track.uri
-            };
-        }).filter(t => t !== null);
+                return {
+                    title: track.name,
+                    artist: track.artists[0]?.name,
+                    artists: track.artists.map((a) => a.name).join(', '),
+                    album: track.album?.name,
+                    duration: Math.floor(track.duration_ms / 1000),
+                    isrc: track.external_ids?.isrc, // Útil para buscar en TIDAL
+                    spotifyId: track.id,
+                    spotifyUri: track.uri,
+                };
+            })
+            .filter((t) => t !== null);
     }
 }
 

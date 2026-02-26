@@ -42,20 +42,20 @@ export const DOWNLOAD_QUALITY_OPTIONS = [
         value: 'LOSSLESS',
         label: 'FLAC (Lossless)',
         description: 'Máxima calidad, archivos grandes (~30-40 MB por canción)',
-        extension: 'flac'
+        extension: 'flac',
     },
     {
         value: 'HIGH',
         label: 'AAC 320kbps',
         description: 'Alta calidad, archivos medianos (~8-12 MB por canción)',
-        extension: 'm4a'
+        extension: 'm4a',
     },
     {
         value: 'LOW',
         label: 'AAC 96kbps',
         description: 'Calidad estándar, archivos pequeños (~3-4 MB por canción)',
-        extension: 'm4a'
-    }
+        extension: 'm4a',
+    },
 ];
 
 export const RATE_LIMIT_ERROR_MESSAGE = 'Too Many Requests. Please wait a moment and try again.';

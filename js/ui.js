@@ -4158,11 +4158,12 @@ export class UIRenderer {
 
         const currentQuality = userSettings.getDownloadQuality();
 
-        select.innerHTML = DOWNLOAD_QUALITY_OPTIONS.map(option => `
+        select.innerHTML = DOWNLOAD_QUALITY_OPTIONS.map(
+            (option) => `
             <option value="${option.value}" ${option.value === currentQuality ? 'selected' : ''}>
                 ${option.label}
             </option>
-        `).join('');
+        `
+        ).join('');
     }
 }
-
