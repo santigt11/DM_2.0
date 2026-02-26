@@ -1143,6 +1143,9 @@ export class LosslessAPI {
         } else {
             streamUrl = this.extractStreamUrlFromManifest(lookup.info.manifest);
             if (!streamUrl) {
+                const manifestMime = lookup.info?.manifestMimeType || 'unknown';
+                const hasManifest = !!lookup.info?.manifest;
+                console.error(`[getStreamUrl] Failed for track ${id}. hasManifest=${hasManifest}, manifestMimeType=${manifestMime}`);
                 throw new Error('Could not resolve stream URL');
             }
         }
@@ -1459,8 +1462,8 @@ export class LosslessAPI {
             // Como no podemos acceder directamente por CORS, pedirle al usuario que nos dé los nombres
             const userInput = prompt(
                 `Please paste the track list from Spotify playlist "${playlistName}".\n\n` +
-                    `Format: One track per line as "Artist - Track Name"\n\n` +
-                    `Tip: You can copy the track list from Spotify web player.`,
+                `Format: One track per line as "Artist - Track Name"\n\n` +
+                `Tip: You can copy the track list from Spotify web player.`,
                 ''
             );
 
