@@ -124,24 +124,61 @@ function parseDuration(durationStr) {
 function getDirectUrl(rawUrl) {
     if (!rawUrl) return null;
 
-    // Only return URLs that are known to be direct audio links
+    // Trim whitespace
+    rawUrl = rawUrl.trim();
+
+    // Skip obviously non-audio URLs (social media pages, etc.)
+    const nonAudioDomains = [
+        'twitter.com', 'x.com', 'instagram.com', 'facebook.com',
+        'tiktok.com', 'youtube.com', 'youtu.be', 'reddit.com',
+        'genius.com', 'wikipedia.org',
+    ];
+    try {
+        const urlHost = new URL(rawUrl).hostname.replace('www.', '');
+        if (nonAudioDomains.some((d) => urlHost === d || urlHost.endsWith('.' + d))) {
+            return null;
+        }
+    } catch {
+        // Not a valid URL
+        return null;
+    }
+
+    // Known services: convert to direct download links
     if (rawUrl.includes('pillows.su/f/')) {
         const match = rawUrl.match(/pillows\.su\/f\/([a-f0-9]+)/);
         if (match) return `https://api.pillows.su/api/download/${match[1]}`;
-    } else if (rawUrl.includes('music.froste.lol/song/')) {
+    }
+
+    if (rawUrl.includes('music.froste.lol/song/')) {
         const match = rawUrl.match(/music\.froste\.lol\/song\/([a-f0-9]+)/);
         if (match) return `https://music.froste.lol/song/${match[1]}/download`;
     }
 
-    // For other URLs, check if they look like direct audio files
-    const audioExtensions = ['.mp3', '.m4a', '.flac', '.wav', '.ogg', '.aac'];
-    const hasAudioExt = audioExtensions.some((ext) => rawUrl.toLowerCase().includes(ext));
+    // Google Drive direct download
+    if (rawUrl.includes('drive.google.com')) {
+        const fileIdMatch = rawUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileIdMatch) {
+            return `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+        }
+    }
 
+    // Dropbox: convert ?dl=0 to ?dl=1
+    if (rawUrl.includes('dropbox.com')) {
+        return rawUrl.replace(/[?&]dl=0/, '?dl=1');
+    }
+
+    // Check for direct audio file extensions
+    const audioExtensions = ['.mp3', '.m4a', '.flac', '.wav', '.ogg', '.aac', '.opus', '.wma'];
+    const hasAudioExt = audioExtensions.some((ext) => rawUrl.toLowerCase().includes(ext));
     if (hasAudioExt) {
         return rawUrl;
     }
 
-    // Return null for URLs that don't look like direct audio files
+    // For any other HTTP(S) URL, return it and let the player attempt playback
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+        return rawUrl;
+    }
+
     return null;
 }
 
