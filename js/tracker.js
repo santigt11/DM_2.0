@@ -129,9 +129,16 @@ function getDirectUrl(rawUrl) {
 
     // Skip obviously non-audio URLs (social media pages, etc.)
     const nonAudioDomains = [
-        'twitter.com', 'x.com', 'instagram.com', 'facebook.com',
-        'tiktok.com', 'youtube.com', 'youtu.be', 'reddit.com',
-        'genius.com', 'wikipedia.org',
+        'twitter.com',
+        'x.com',
+        'instagram.com',
+        'facebook.com',
+        'tiktok.com',
+        'youtube.com',
+        'youtu.be',
+        'reddit.com',
+        'genius.com',
+        'wikipedia.org',
     ];
     try {
         const urlHost = new URL(rawUrl).hostname.replace('www.', '');
