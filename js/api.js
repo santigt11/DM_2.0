@@ -182,7 +182,7 @@ export class LosslessAPI {
 
     prepareArtist(artist) {
         // Si la respuesta viene en formato v2.0, extraer el objeto artist interno
-        if (artist.version === "2.0" && artist.artist) {
+        if (artist.version === '2.0' && artist.artist) {
             artist = artist.artist;
         }
 
@@ -493,8 +493,6 @@ export class LosslessAPI {
                 }
             }
         }
-
-
 
         // If album exists but has no artist, try to extract from tracks
         if (!album.artist && tracksSection?.items && tracksSection.items.length > 0) {
@@ -1162,9 +1160,10 @@ export class LosslessAPI {
             let blob;
 
             // Si la calidad solicitada no está en la lista de fallback, empezar con ella
-            const qualitiesToTry = quality !== 'LOSSLESS' && quality !== 'HIGH' && quality !== 'LOW'
-                ? [quality, ...qualityPriority]
-                : qualityPriority;
+            const qualitiesToTry =
+                quality !== 'LOSSLESS' && quality !== 'HIGH' && quality !== 'LOW'
+                    ? [quality, ...qualityPriority]
+                    : qualityPriority;
 
             for (const currentQuality of qualitiesToTry) {
                 try {
@@ -1186,7 +1185,8 @@ export class LosslessAPI {
                     }
 
                     // Intentar usar servidor de metadatos (solo en producción)
-                    const isLocalhost = window.location.hostname === 'localhost' ||
+                    const isLocalhost =
+                        window.location.hostname === 'localhost' ||
                         window.location.hostname === '127.0.0.1' ||
                         window.location.hostname === '';
 
@@ -1197,7 +1197,10 @@ export class LosslessAPI {
                             console.log(`[DOWNLOAD] Successfully downloaded with metadata: ${filename}`);
                             return;
                         } catch (error) {
-                            console.warn(`[DOWNLOAD] Metadata server failed, falling back to direct download:`, error.message);
+                            console.warn(
+                                `[DOWNLOAD] Metadata server failed, falling back to direct download:`,
+                                error.message
+                            );
                             // Continuar con descarga directa
                         }
                     } else if (isLocalhost && trackMetadata) {
@@ -1226,11 +1229,11 @@ export class LosslessAPI {
                     a.click();
 
                     // Delay before cleanup to ensure Android browsers process the download
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise((resolve) => setTimeout(resolve, 100));
                     document.body.removeChild(a);
 
                     // Additional delay before revoking URL to prevent Android download failures
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    await new Promise((resolve) => setTimeout(resolve, 200));
                     URL.revokeObjectURL(url);
 
                     console.log(`[DOWNLOAD] Successfully downloaded: ${filename} at quality ${currentQuality}`);
@@ -1456,8 +1459,8 @@ export class LosslessAPI {
             // Como no podemos acceder directamente por CORS, pedirle al usuario que nos dé los nombres
             const userInput = prompt(
                 `Please paste the track list from Spotify playlist "${playlistName}".\n\n` +
-                `Format: One track per line as "Artist - Track Name"\n\n` +
-                `Tip: You can copy the track list from Spotify web player.`,
+                    `Format: One track per line as "Artist - Track Name"\n\n` +
+                    `Tip: You can copy the track list from Spotify web player.`,
                 ''
             );
 
@@ -1466,7 +1469,7 @@ export class LosslessAPI {
             }
 
             // Parsear el input del usuario
-            const lines = userInput.split('\n').filter(line => line.trim());
+            const lines = userInput.split('\n').filter((line) => line.trim());
             console.log(`Parsing ${lines.length} tracks from user input`);
 
             const searchPromises = [];
@@ -1479,9 +1482,9 @@ export class LosslessAPI {
                 let artistName, trackTitle;
 
                 if (cleanLine.includes(' - ')) {
-                    [artistName, trackTitle] = cleanLine.split(' - ').map(s => s.trim());
+                    [artistName, trackTitle] = cleanLine.split(' - ').map((s) => s.trim());
                 } else if (cleanLine.includes(' – ')) {
-                    [artistName, trackTitle] = cleanLine.split(' – ').map(s => s.trim());
+                    [artistName, trackTitle] = cleanLine.split(' – ').map((s) => s.trim());
                 } else {
                     // Solo el nombre de la canción
                     trackTitle = cleanLine;
@@ -1496,7 +1499,7 @@ export class LosslessAPI {
                 // Buscar la canción en nuestro servidor
                 searchPromises.push(
                     this.searchTracks(query)
-                        .then(result => {
+                        .then((result) => {
                             const results = result.items || [];
                             if (results.length > 0) {
                                 // Buscar la mejor coincidencia
@@ -1504,9 +1507,11 @@ export class LosslessAPI {
                                     for (const found of results.slice(0, 3)) {
                                         if (!found || !found.title || !found.artist) continue;
 
-                                        const titleMatch = found.title.toLowerCase().includes(trackTitle.toLowerCase()) ||
+                                        const titleMatch =
+                                            found.title.toLowerCase().includes(trackTitle.toLowerCase()) ||
                                             trackTitle.toLowerCase().includes(found.title.toLowerCase());
-                                        const artistMatch = found.artist.toLowerCase().includes(artistName.toLowerCase()) ||
+                                        const artistMatch =
+                                            found.artist.toLowerCase().includes(artistName.toLowerCase()) ||
                                             artistName.toLowerCase().includes(found.artist.toLowerCase());
 
                                         if (titleMatch && artistMatch) {
@@ -1523,7 +1528,7 @@ export class LosslessAPI {
                             }
                             return null;
                         })
-                        .catch(err => {
+                        .catch((err) => {
                             console.warn(`Could not find: ${query}`, err);
                             return null;
                         })
@@ -1551,9 +1556,9 @@ export class LosslessAPI {
                 playlist: {
                     name: playlistName,
                     numberOfTracks: tracks.length,
-                    source: 'spotify'
+                    source: 'spotify',
                 },
-                tracks
+                tracks,
             };
 
             await this.cache.set('spotify_playlist', playlistId, result);

@@ -386,7 +386,6 @@ input,
 textarea,
 [contenteditable] {
     user-select: text;
-    user-select: text;
 }
 
 img {
