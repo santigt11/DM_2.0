@@ -1,7 +1,26 @@
-import { REPEAT_MODE, SVG_PLAY, SVG_PAUSE, formatTime } from './utils.js';
+//js/player.js
+import { MediaPlayer } from 'dashjs';
+import {
+    REPEAT_MODE,
+    formatTime,
+    getTrackArtists,
+    getTrackTitle,
+    getTrackArtistsHTML,
+    getTrackYearDisplay,
+    createQualityBadgeHTML,
+    escapeHtml,
+} from './utils.js';
+import {
+    queueManager,
+    replayGainSettings,
+    trackDateSettings,
+    exponentialVolumeSettings,
+    audioEffectsSettings,
+} from './storage.js';
+import { audioContextManager } from './audio-context.js';
 
 export class Player {
-    constructor(audioElement, api, quality = 'HIGH') {
+    constructor(audioElement, api, quality = 'HI_RES_LOSSLESS') {
         this.audio = audioElement;
         this.api = api;
         this.quality = quality; // Calidad para streaming (HIGH = AAC 320kbps)
@@ -13,6 +32,292 @@ export class Player {
         this.repeatMode = REPEAT_MODE.OFF;
         this.preloadCache = new Map();
         this.preloadAbortController = null;
+        this.currentTrack = null;
+        this.currentRgValues = null;
+        this.userVolume = parseFloat(localStorage.getItem('volume') || '0.7');
+        this.isFallbackRetry = false;
+        this.autoplayBlocked = false;
+        this.isIOS = typeof window !== 'undefined' && window.__IS_IOS__ === true;
+        this.isPwa =
+            typeof window !== 'undefined' &&
+            (window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone === true);
+
+        // Sleep timer properties
+        this.sleepTimer = null;
+        this.sleepTimerEndTime = null;
+        this.sleepTimerInterval = null;
+
+        // Initialize dash.js player
+        this.dashPlayer = MediaPlayer().create();
+        this.dashPlayer.updateSettings({
+            streaming: {
+                buffer: {
+                    fastSwitchEnabled: true,
+                },
+            },
+        });
+        this.dashInitialized = false;
+
+        this.loadQueueState();
+        this.setupMediaSession();
+
+        window.addEventListener('beforeunload', () => {
+            this.saveQueueState();
+        });
+
+        // Handle visibility change for iOS - AudioContext gets suspended when screen locks
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && !this.audio.paused) {
+                // Ensure audio context is resumed when user returns to the app
+                if (!audioContextManager.isReady()) {
+                    audioContextManager.init(this.audio);
+                }
+                audioContextManager.resume();
+            }
+            if (document.visibilityState === 'visible' && this.autoplayBlocked) {
+                this.autoplayBlocked = false;
+                this.audio.play().catch(() => {});
+            }
+        });
+    }
+
+    setVolume(value) {
+        this.userVolume = Math.max(0, Math.min(1, value));
+        localStorage.setItem('volume', this.userVolume);
+        this.applyReplayGain();
+    }
+
+    applyReplayGain() {
+        const mode = replayGainSettings.getMode(); // 'off', 'track', 'album'
+        let gainDb = 0;
+        let peak = 1.0;
+
+        if (mode !== 'off' && this.currentRgValues) {
+            const { trackReplayGain, trackPeakAmplitude, albumReplayGain, albumPeakAmplitude } = this.currentRgValues;
+
+            if (mode === 'album' && albumReplayGain !== undefined) {
+                gainDb = albumReplayGain;
+                peak = albumPeakAmplitude || 1.0;
+            } else if (trackReplayGain !== undefined) {
+                gainDb = trackReplayGain;
+                peak = trackPeakAmplitude || 1.0;
+            }
+
+            // Apply Pre-Amp
+            gainDb += replayGainSettings.getPreamp();
+        }
+
+        // Convert dB to linear scale: 10^(dB/20)
+        let scale = Math.pow(10, gainDb / 20);
+
+        // Peak protection (prevent clipping)
+        if (scale * peak > 1.0) {
+            scale = 1.0 / peak;
+        }
+
+        // Apply exponential volume curve if enabled
+        const curvedVolume = exponentialVolumeSettings.applyCurve(this.userVolume);
+
+        // Calculate effective volume
+        const effectiveVolume = curvedVolume * scale;
+
+        // Apply to audio element and/or Web Audio graph
+        if (audioContextManager.isReady()) {
+            // If Web Audio is active, we apply volume there for better compatibility
+            // Especially on Linux where audio.volume might not affect the Web Audio graph
+            // We set audio.volume to 1.0 to avoid double-reduction, or keep it synced?
+            // Some browsers require audio.volume to be set for system media controls to show volume
+            this.audio.volume = 1.0;
+            audioContextManager.setVolume(effectiveVolume);
+        } else {
+            this.audio.volume = Math.max(0, Math.min(1, effectiveVolume));
+        }
+    }
+
+    applyAudioEffects() {
+        const speed = audioEffectsSettings.getSpeed();
+        if (this.audio.playbackRate !== speed) {
+            this.audio.playbackRate = speed;
+        }
+    }
+
+    setPlaybackSpeed(speed) {
+        const validSpeed = Math.max(0.01, Math.min(100, parseFloat(speed) || 1.0));
+        audioEffectsSettings.setSpeed(validSpeed);
+        this.applyAudioEffects();
+    }
+
+    loadQueueState() {
+        const savedState = queueManager.getQueue();
+        if (savedState) {
+            this.queue = savedState.queue || [];
+            this.shuffledQueue = savedState.shuffledQueue || [];
+            this.originalQueueBeforeShuffle = savedState.originalQueueBeforeShuffle || [];
+            this.currentQueueIndex = savedState.currentQueueIndex ?? -1;
+            this.shuffleActive = savedState.shuffleActive || false;
+            this.repeatMode = savedState.repeatMode !== undefined ? savedState.repeatMode : REPEAT_MODE.OFF;
+
+            // Restore current track if queue exists and index is valid
+            const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
+            if (this.currentQueueIndex >= 0 && this.currentQueueIndex < currentQueue.length) {
+                this.currentTrack = currentQueue[this.currentQueueIndex];
+
+                // Restore UI
+                const track = this.currentTrack;
+                const trackTitle = getTrackTitle(track);
+                const trackArtistsHTML = getTrackArtistsHTML(track);
+                const yearDisplay = getTrackYearDisplay(track);
+
+                const coverEl = document.querySelector('.now-playing-bar .cover');
+                const titleEl = document.querySelector('.now-playing-bar .title');
+                const albumEl = document.querySelector('.now-playing-bar .album');
+                const artistEl = document.querySelector('.now-playing-bar .artist');
+
+                if (coverEl) {
+                    const videoCoverUrl = track.album?.videoCover
+                        ? this.api.tidalAPI.getVideoCoverUrl(track.album.videoCover)
+                        : null;
+                    const coverUrl = videoCoverUrl || this.api.getCoverUrl(track.album?.cover);
+
+                    if (videoCoverUrl) {
+                        if (coverEl.tagName === 'IMG') {
+                            const video = document.createElement('video');
+                            video.src = videoCoverUrl;
+                            video.autoplay = true;
+                            video.loop = true;
+                            video.muted = true;
+                            video.playsInline = true;
+                            video.className = coverEl.className;
+                            coverEl.replaceWith(video);
+                        }
+                    } else {
+                        if (coverEl.tagName === 'VIDEO') {
+                            const img = document.createElement('img');
+                            img.src = coverUrl;
+                            img.className = coverEl.className;
+                            coverEl.replaceWith(img);
+                        } else {
+                            coverEl.src = coverUrl;
+                        }
+                    }
+                }
+                if (titleEl) {
+                    const qualityBadge = createQualityBadgeHTML(track);
+                    titleEl.innerHTML = `${escapeHtml(trackTitle)} ${qualityBadge}`;
+                }
+                if (albumEl) {
+                    const albumTitle = track.album?.title || '';
+                    if (albumTitle && albumTitle !== trackTitle) {
+                        albumEl.textContent = albumTitle;
+                        albumEl.style.display = 'block';
+                    } else {
+                        albumEl.textContent = '';
+                        albumEl.style.display = 'none';
+                    }
+                }
+                if (artistEl) artistEl.innerHTML = trackArtistsHTML + yearDisplay;
+
+                // Fetch album release date in background if missing
+                if (!yearDisplay && track.album?.id) {
+                    this.loadAlbumYear(track, trackArtistsHTML, artistEl);
+                }
+
+                const mixBtn = document.getElementById('now-playing-mix-btn');
+                if (mixBtn) {
+                    mixBtn.style.display = track.mixes && track.mixes.TRACK_MIX ? 'flex' : 'none';
+                }
+                const totalDurationEl = document.getElementById('total-duration');
+                if (totalDurationEl) totalDurationEl.textContent = formatTime(track.duration);
+                document.title = `${trackTitle} • ${getTrackArtists(track)}`;
+
+                this.updatePlayingTrackIndicator();
+                this.updateMediaSession(track);
+            }
+        }
+    }
+
+    saveQueueState() {
+        queueManager.saveQueue({
+            queue: this.queue,
+            shuffledQueue: this.shuffledQueue,
+            originalQueueBeforeShuffle: this.originalQueueBeforeShuffle,
+            currentQueueIndex: this.currentQueueIndex,
+            shuffleActive: this.shuffleActive,
+            repeatMode: this.repeatMode,
+        });
+
+        if (window.renderQueueFunction) {
+            window.renderQueueFunction();
+        }
+    }
+
+    setupMediaSession() {
+        if (!('mediaSession' in navigator)) return;
+
+        navigator.mediaSession.setActionHandler('play', async () => {
+            // Initialize and resume audio context first (required for iOS lock screen)
+            // Must happen before audio.play() or audio won't route through Web Audio
+            if (!audioContextManager.isReady()) {
+                audioContextManager.init(this.audio);
+                this.applyReplayGain();
+            }
+            await audioContextManager.resume();
+
+            try {
+                await this.audio.play();
+            } catch (e) {
+                console.error('MediaSession play failed:', e);
+                // If play fails, try to handle it like a regular play/pause
+                this.handlePlayPause();
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('pause', () => {
+            this.audio.pause();
+        });
+
+        navigator.mediaSession.setActionHandler('previoustrack', async () => {
+            // Ensure audio context is active for iOS lock screen controls
+            if (!audioContextManager.isReady()) {
+                audioContextManager.init(this.audio);
+                this.applyReplayGain();
+            }
+            await audioContextManager.resume();
+            this.playPrev();
+        });
+
+        navigator.mediaSession.setActionHandler('nexttrack', async () => {
+            // Ensure audio context is active for iOS lock screen controls
+            if (!audioContextManager.isReady()) {
+                audioContextManager.init(this.audio);
+                this.applyReplayGain();
+            }
+            await audioContextManager.resume();
+            this.playNext();
+        });
+
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+            const skipTime = details.seekOffset || 10;
+            this.seekBackward(skipTime);
+        });
+
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+            const skipTime = details.seekOffset || 10;
+            this.seekForward(skipTime);
+        });
+
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.seekTime !== undefined) {
+                this.audio.currentTime = Math.max(0, details.seekTime);
+                this.updateMediaSessionPositionState();
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('stop', () => {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+            this.updateMediaSessionPlaybackState();
+        });
     }
 
     setQuality(quality) {
@@ -47,149 +352,388 @@ export class Player {
             }
         }
 
-        for (const { track, index } of tracksToPreload) {
+        for (const { track } of tracksToPreload) {
             if (this.preloadCache.has(track.id)) continue;
-
+            const isTracker = track.isTracker || (track.id && String(track.id).startsWith('tracker-'));
+            if (track.isLocal || isTracker || (track.audioUrl && !track.isLocal)) continue;
             try {
                 const streamUrl = await this.api.getStreamUrl(track.id, this.quality);
 
                 if (this.preloadAbortController.signal.aborted) break;
 
-                fetch(streamUrl, {
-                    signal: this.preloadAbortController.signal,
-                    method: 'GET',
-                    mode: 'cors',
-                    cache: 'default'
-                }).then(response => {
-                    if (response.ok) {
-                        this.preloadCache.set(track.id, streamUrl);
-                    }
-                }).catch(err => {
-                    if (err.name !== 'AbortError') {
-                        console.debug('Preload failed for:', track.title);
-                    }
-                });
-
+                this.preloadCache.set(track.id, streamUrl);
+                // Warm connection/cache
+                // For Blob URLs (DASH), this head request is not needed and can cause errors.
+                if (!streamUrl.startsWith('blob:')) {
+                    fetch(streamUrl, { method: 'HEAD', signal: this.preloadAbortController.signal }).catch(() => {});
+                }
             } catch (error) {
                 if (error.name !== 'AbortError') {
-                    console.debug('Failed to get stream URL for preload:', track.title);
+                    // console.debug('Failed to get stream URL for preload:', trackTitle);
                 }
             }
         }
     }
 
-    async playTrackFromQueue() {
+    async playTrackFromQueue(startTime = 0, recursiveCount = 0) {
         const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
         if (this.currentQueueIndex < 0 || this.currentQueueIndex >= currentQueue.length) {
             return;
         }
 
         const track = currentQueue[this.currentQueueIndex];
+        if (track.isUnavailable) {
+            console.warn(`Attempted to play unavailable track: ${track.title}. Skipping...`);
+            this.playNext();
+            return;
+        }
 
-        // Get UI elements
+        // Check if track is blocked
+        const { contentBlockingSettings } = await import('./storage.js');
+        if (contentBlockingSettings.shouldHideTrack(track)) {
+            console.warn(`Attempted to play blocked track: ${track.title}. Skipping...`);
+            this.playNext();
+            return;
+        }
+
+        this.saveQueueState();
+
+        this.currentTrack = track;
+
+        const trackTitle = getTrackTitle(track);
+        const trackArtistsHTML = getTrackArtistsHTML(track);
+        const yearDisplay = getTrackYearDisplay(track);
+
         const coverEl = document.querySelector('.now-playing-bar .cover');
-        const detailsEl = document.querySelector('.now-playing-bar .details');
-        const titleEl = document.querySelector('.now-playing-bar .title');
+        if (coverEl) {
+            const videoCoverUrl = track.album?.videoCover
+                ? this.api.tidalAPI.getVideoCoverUrl(track.album.videoCover)
+                : null;
+            const coverUrl = videoCoverUrl || this.api.getCoverUrl(track.album?.cover);
+
+            if (videoCoverUrl) {
+                if (coverEl.tagName === 'IMG') {
+                    const video = document.createElement('video');
+                    video.src = videoCoverUrl;
+                    video.autoplay = true;
+                    video.loop = true;
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.className = coverEl.className;
+                    coverEl.replaceWith(video);
+                }
+            } else {
+                if (coverEl.tagName === 'VIDEO') {
+                    const img = document.createElement('img');
+                    img.src = coverUrl;
+                    img.className = coverEl.className;
+                    coverEl.replaceWith(img);
+                } else {
+                    coverEl.src = coverUrl;
+                }
+            }
+        }
+        document.querySelector('.now-playing-bar .title').innerHTML =
+            `${escapeHtml(trackTitle)} ${createQualityBadgeHTML(track)}`;
+        const albumEl = document.querySelector('.now-playing-bar .album');
+        if (albumEl) {
+            const albumTitle = track.album?.title || '';
+            if (albumTitle && albumTitle !== trackTitle) {
+                albumEl.textContent = albumTitle;
+                albumEl.style.display = 'block';
+            } else {
+                albumEl.textContent = '';
+                albumEl.style.display = 'none';
+            }
+        }
         const artistEl = document.querySelector('.now-playing-bar .artist');
+        artistEl.innerHTML = trackArtistsHTML + yearDisplay;
 
-        // Add transition classes for smooth fade
-        coverEl.classList.add('transitioning');
-        detailsEl.classList.add('transitioning');
+        // Fetch album release date in background if missing
+        if (!yearDisplay && track.album?.id) {
+            this.loadAlbumYear(track, trackArtistsHTML, artistEl);
+        }
 
-        // Wait for fade out, then update
-        setTimeout(() => {
-            coverEl.src = this.api.getCoverUrl(track.album?.cover, '160');
-            titleEl.textContent = track.title;
-            artistEl.textContent = track.artist?.name || 'Unknown Artist';
-            document.title = `${track.title} • ${track.artist?.name || 'Unknown'}`;
-
-            // Remove transition classes after image loads or timeout
-            coverEl.onload = () => {
-                coverEl.classList.remove('transitioning');
-                detailsEl.classList.remove('transitioning');
-                titleEl.classList.add('animate-in');
-                artistEl.classList.add('animate-in');
-                setTimeout(() => {
-                    titleEl.classList.remove('animate-in');
-                    artistEl.classList.remove('animate-in');
-                }, 300);
-            };
-            // Fallback timeout
-            setTimeout(() => {
-                coverEl.classList.remove('transitioning');
-                detailsEl.classList.remove('transitioning');
-            }, 500);
-        }, 150);
+        const mixBtn = document.getElementById('now-playing-mix-btn');
+        if (mixBtn) {
+            mixBtn.style.display = track.mixes && track.mixes.TRACK_MIX ? 'flex' : 'none';
+        }
+        document.title = `${trackTitle} • ${getTrackArtists(track)}`;
 
         this.updatePlayingTrackIndicator();
         this.updateMediaSession(track);
+        this.updateMediaSessionPlaybackState();
+        this.updateNativeWindow(track);
 
         try {
             let streamUrl;
 
-            if (this.preloadCache.has(track.id)) {
-                streamUrl = this.preloadCache.get(track.id);
+            const isTracker = track.isTracker || (track.id && String(track.id).startsWith('tracker-'));
+
+            if (isTracker || (track.audioUrl && !track.isLocal)) {
+                if (this.dashInitialized) {
+                    this.dashPlayer.reset();
+                    this.dashInitialized = false;
+                }
+                streamUrl = track.audioUrl;
+
+                if (
+                    (!streamUrl || (typeof streamUrl === 'string' && streamUrl.startsWith('blob:'))) &&
+                    track.remoteUrl
+                ) {
+                    streamUrl = track.remoteUrl;
+                }
+
+                if (!streamUrl) {
+                    console.warn(`Track ${trackTitle} audio URL is missing. Skipping.`);
+                    track.isUnavailable = true;
+                    this.playNext();
+                    return;
+                }
+
+                if (isTracker && !streamUrl.startsWith('blob:') && streamUrl.startsWith('http')) {
+                    try {
+                        const response = await fetch(streamUrl);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            streamUrl = URL.createObjectURL(blob);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to fetch tracker blob, trying direct link', e);
+                    }
+                }
+
+                this.currentRgValues = null;
+                this.applyReplayGain();
+                this.applyAudioEffects();
+
+                this.audio.src = streamUrl;
+
+                // Wait for audio to be ready before playing (prevents restart issues with blob URLs)
+                const canPlay = await this.waitForCanPlayOrTimeout();
+                if (!canPlay) return;
+
+                if (startTime > 0) {
+                    this.audio.currentTime = startTime;
+                }
+                const played = await this.safePlay();
+                if (!played) return;
+            } else if (track.isLocal && track.file) {
+                if (this.dashInitialized) {
+                    this.dashPlayer.reset(); // Ensure dash is off
+                    this.dashInitialized = false;
+                }
+                streamUrl = URL.createObjectURL(track.file);
+                this.currentRgValues = null; // No replaygain for local files yet
+                this.applyReplayGain();
+                this.applyAudioEffects();
+
+                this.audio.src = streamUrl;
+
+                // Wait for audio to be ready before playing
+                const canPlay = await this.waitForCanPlayOrTimeout();
+                if (!canPlay) return;
+
+                if (startTime > 0) {
+                    this.audio.currentTime = startTime;
+                }
+                const played = await this.safePlay();
+                if (!played) return;
             } else {
-                streamUrl = await this.api.getStreamUrl(track.id, this.quality);
+                const isQobuz = String(track.id).startsWith('q:');
+
+                if (isQobuz) {
+                    // Qobuz: skip getTrack call, directly fetch stream URL
+                    this.currentRgValues = null;
+                    this.applyReplayGain();
+
+                    if (this.preloadCache.has(track.id)) {
+                        streamUrl = this.preloadCache.get(track.id);
+                    } else {
+                        streamUrl = await this.api.getStreamUrl(track.id, this.quality);
+                    }
+                } else {
+                    // Tidal: Get track data for ReplayGain (should be cached by API)
+                    const trackData = await this.api.getTrack(track.id, this.quality);
+
+                    if (trackData && trackData.info) {
+                        this.currentRgValues = {
+                            trackReplayGain: trackData.info.trackReplayGain,
+                            trackPeakAmplitude: trackData.info.trackPeakAmplitude,
+                            albumReplayGain: trackData.info.albumReplayGain,
+                            albumPeakAmplitude: trackData.info.albumPeakAmplitude,
+                        };
+                    } else {
+                        this.currentRgValues = null;
+                    }
+                    this.applyReplayGain();
+
+                    if (this.preloadCache.has(track.id)) {
+                        streamUrl = this.preloadCache.get(track.id);
+                    } else if (trackData.originalTrackUrl) {
+                        streamUrl = trackData.originalTrackUrl;
+                    } else if (trackData.info?.manifest) {
+                        streamUrl = this.api.extractStreamUrlFromManifest(trackData.info.manifest);
+                    } else {
+                        streamUrl = await this.api.getStreamUrl(track.id, this.quality);
+                    }
+                }
+
+                // Handle playback
+                if (streamUrl && streamUrl.startsWith('blob:') && !track.isLocal) {
+                    // It's likely a DASH manifest blob URL
+                    if (this.dashInitialized) {
+                        this.dashPlayer.attachSource(streamUrl);
+                    } else {
+                        this.dashPlayer.initialize(this.audio, streamUrl, true);
+                        this.dashInitialized = true;
+                    }
+
+                    if (startTime > 0) {
+                        this.dashPlayer.seek(startTime);
+                    }
+                } else {
+                    if (this.dashInitialized) {
+                        this.dashPlayer.reset();
+                        this.dashInitialized = false;
+                    }
+                    this.audio.src = streamUrl;
+
+                    // Wait for audio to be ready before playing
+                    const canPlay = await this.waitForCanPlayOrTimeout();
+                    if (!canPlay) return;
+
+                    if (startTime > 0) {
+                        this.audio.currentTime = startTime;
+                    }
+                    const played = await this.safePlay();
+                    if (!played) return;
+                }
             }
 
-            this.audio.src = streamUrl;
-            await this.audio.play();
-
             this.preloadNextTracks();
-
         } catch (error) {
-            console.error(`Could not get track URL for: ${track.title}`, error);
-            document.querySelector('.now-playing-bar .title').textContent = `Error: ${track.title}`;
-            document.querySelector('.now-playing-bar .artist').textContent = error.message || 'Could not load track';
-            document.querySelector('.play-pause-btn').innerHTML = SVG_PLAY;
+            if (error && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+                this.autoplayBlocked = true;
+                return;
+            }
+            console.error(`Could not play track: ${trackTitle}`, error);
+            // Skip to next track on unexpected error
+            if (recursiveCount < currentQueue.length) {
+                setTimeout(() => this.playNext(recursiveCount + 1), 1000);
+            }
         }
     }
 
-    playNext() {
+    playAtIndex(index) {
+        const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
+        if (index >= 0 && index < currentQueue.length) {
+            this.currentQueueIndex = index;
+            this.playTrackFromQueue(0, 0);
+        }
+    }
+
+    playNext(recursiveCount = 0) {
         const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
         const isLastTrack = this.currentQueueIndex >= currentQueue.length - 1;
 
-        if (this.repeatMode === REPEAT_MODE.ONE) {
-            this.audio.currentTime = 0;
-            this.audio.play();
+        if (recursiveCount > currentQueue.length) {
+            console.error('All tracks in queue are unavailable or blocked.');
+            this.audio.pause();
             return;
         }
 
-        if (!isLastTrack) {
-            this.currentQueueIndex++;
-        } else if (this.repeatMode === REPEAT_MODE.ALL) {
-            this.currentQueueIndex = 0;
-        } else {
-            return;
-        }
+        // Import blocking settings dynamically
+        import('./storage.js').then(({ contentBlockingSettings }) => {
+            if (
+                this.repeatMode === REPEAT_MODE.ONE &&
+                !currentQueue[this.currentQueueIndex]?.isUnavailable &&
+                !contentBlockingSettings.shouldHideTrack(currentQueue[this.currentQueueIndex])
+            ) {
+                this.playTrackFromQueue(0, recursiveCount);
+                return;
+            }
 
-        this.playTrackFromQueue();
+            if (!isLastTrack) {
+                this.currentQueueIndex++;
+                const track = currentQueue[this.currentQueueIndex];
+                // Skip unavailable and blocked tracks
+                if (track?.isUnavailable || contentBlockingSettings.shouldHideTrack(track)) {
+                    return this.playNext(recursiveCount + 1);
+                }
+            } else if (this.repeatMode === REPEAT_MODE.ALL) {
+                this.currentQueueIndex = 0;
+                const track = currentQueue[this.currentQueueIndex];
+                // Skip unavailable and blocked tracks
+                if (track?.isUnavailable || contentBlockingSettings.shouldHideTrack(track)) {
+                    return this.playNext(recursiveCount + 1);
+                }
+            } else {
+                return;
+            }
+
+            this.playTrackFromQueue(0, recursiveCount);
+        });
     }
 
-    playPrev() {
+    playPrev(recursiveCount = 0) {
         if (this.audio.currentTime > 3) {
             this.audio.currentTime = 0;
+            this.updateMediaSessionPositionState();
         } else if (this.currentQueueIndex > 0) {
             this.currentQueueIndex--;
-            this.playTrackFromQueue();
+            // Skip unavailable and blocked tracks
+            const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
+
+            if (recursiveCount > currentQueue.length) {
+                console.error('All tracks in queue are unavailable or blocked.');
+                this.audio.pause();
+                return;
+            }
+
+            import('./storage.js').then(({ contentBlockingSettings }) => {
+                const track = currentQueue[this.currentQueueIndex];
+                if (track?.isUnavailable || contentBlockingSettings.shouldHideTrack(track)) {
+                    return this.playPrev(recursiveCount + 1);
+                }
+                this.playTrackFromQueue(0, recursiveCount);
+            });
         }
     }
 
     handlePlayPause() {
-        if (!this.audio.src) return;
-        this.audio.paused ? this.audio.play() : this.audio.pause();
+        if (!this.audio.src || this.audio.error) {
+            if (this.currentTrack) {
+                this.playTrackFromQueue(0, 0);
+            }
+            return;
+        }
+
+        if (this.audio.paused) {
+            this.safePlay().catch((e) => {
+                if (e.name === 'NotAllowedError' || e.name === 'AbortError') return;
+                console.error('Play failed, reloading track:', e);
+                if (this.currentTrack) {
+                    this.playTrackFromQueue(0, 0);
+                }
+            });
+        } else {
+            this.audio.pause();
+            this.saveQueueState();
+        }
     }
 
     seekBackward(seconds = 10) {
         const newTime = Math.max(0, this.audio.currentTime - seconds);
         this.audio.currentTime = newTime;
+        this.updateMediaSessionPositionState();
     }
 
     seekForward(seconds = 10) {
         const duration = this.audio.duration || 0;
         const newTime = Math.min(duration, this.audio.currentTime + seconds);
         this.audio.currentTime = newTime;
+        this.updateMediaSessionPositionState();
     }
 
     toggleShuffle() {
@@ -198,25 +742,38 @@ export class Player {
         if (this.shuffleActive) {
             this.originalQueueBeforeShuffle = [...this.queue];
             const currentTrack = this.queue[this.currentQueueIndex];
-            this.shuffledQueue = [...this.queue].sort(() => Math.random() - 0.5);
-            this.currentQueueIndex = this.shuffledQueue.findIndex(t => t.id === currentTrack?.id);
 
-            if (this.currentQueueIndex === -1 && currentTrack) {
-                this.shuffledQueue.unshift(currentTrack);
+            const tracksToShuffle = [...this.queue];
+            if (currentTrack && this.currentQueueIndex >= 0) {
+                tracksToShuffle.splice(this.currentQueueIndex, 1);
+            }
+
+            for (let i = tracksToShuffle.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tracksToShuffle[i], tracksToShuffle[j]] = [tracksToShuffle[j], tracksToShuffle[i]];
+            }
+
+            if (currentTrack) {
+                this.shuffledQueue = [currentTrack, ...tracksToShuffle];
                 this.currentQueueIndex = 0;
+            } else {
+                this.shuffledQueue = tracksToShuffle;
+                this.currentQueueIndex = -1;
             }
         } else {
             const currentTrack = this.shuffledQueue[this.currentQueueIndex];
             this.queue = [...this.originalQueueBeforeShuffle];
-            this.currentQueueIndex = this.queue.findIndex(t => t.id === currentTrack?.id);
+            this.currentQueueIndex = this.queue.findIndex((t) => t.id === currentTrack?.id);
         }
 
         this.preloadCache.clear();
         this.preloadNextTracks();
+        this.saveQueueState();
     }
 
     toggleRepeat() {
         this.repeatMode = (this.repeatMode + 1) % 3;
+        this.saveQueueState();
         return this.repeatMode;
     }
 
@@ -225,130 +782,103 @@ export class Player {
         this.currentQueueIndex = startIndex;
         this.shuffleActive = false;
         this.preloadCache.clear();
+        this.saveQueueState();
     }
 
-    addToQueue(track) {
-        // Evitar duplicados: verificar si ya existe en la cola
-        const isDuplicate = this.queue.some(queueTrack =>
-            queueTrack.id === track.id
-        );
+    addToQueue(trackOrTracks) {
+        const tracks = Array.isArray(trackOrTracks) ? trackOrTracks : [trackOrTracks];
+        this.queue.push(...tracks);
 
-        if (!isDuplicate) {
-            this.queue.push(track);
-            if (this.shuffleActive) {
-                this.shuffledQueue.push(track);
-            }
-            return true; // Se agregó
+        if (this.shuffleActive) {
+            this.shuffledQueue.push(...tracks);
+            this.originalQueueBeforeShuffle.push(...tracks);
         }
-        return false; // Ya existe
+
+        if (!this.currentTrack || this.currentQueueIndex === -1) {
+            this.currentQueueIndex = this.getCurrentQueue().length - tracks.length;
+            this.playTrackFromQueue(0, 0);
+        }
+        this.saveQueueState();
     }
 
-    addMultipleToQueue(tracks) {
-        if (Array.isArray(tracks)) {
-            const newTracks = tracks.filter(track =>
-                !this.queue.some(queueTrack => queueTrack.id === track.id)
-            );
+    addNextToQueue(trackOrTracks) {
+        const tracks = Array.isArray(trackOrTracks) ? trackOrTracks : [trackOrTracks];
+        const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
+        const insertIndex = this.currentQueueIndex + 1;
 
-            if (newTracks.length > 0) {
-                this.queue.push(...newTracks);
-                if (this.shuffleActive) {
-                    this.shuffledQueue.push(...newTracks);
-                }
-            }
+        // Insert after current track
+        currentQueue.splice(insertIndex, 0, ...tracks);
 
-            return {
-                added: newTracks.length,
-                duplicates: tracks.length - newTracks.length
-            };
+        // If we are shuffling, we might want to also add it to the original queue for consistency,
+        // though syncing that is tricky. The standard logic often just appends to the active queue view.
+        if (this.shuffleActive) {
+            this.originalQueueBeforeShuffle.push(...tracks); // Sync original queue
         }
-        return { added: 0, duplicates: 0 };
-    }
 
-    clearQueue() {
-        this.queue = [];
-        this.shuffledQueue = [];
-        this.currentQueueIndex = 0;
-
-        // Si hay reproducción activa, pausar
-        if (this.audio && !this.audio.paused) {
-            this.pause();
-        }
+        this.saveQueueState();
+        this.preloadNextTracks(); // Update preload since next track changed
     }
 
     removeFromQueue(index) {
-        const currentQueue = this.getCurrentQueue();
+        const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
 
-        // Validar índice
-        if (index < 0 || index >= currentQueue.length) {
-            console.warn('Invalid queue index:', index);
-            return;
+        // If removing current track
+        if (index === this.currentQueueIndex) {
+            // If playing, we might want to stop or just let it finish?
+            // For now, let's just remove it.
+            // If it's the last track, playback will stop naturally or we handle it?
         }
 
-        // Determinar qué colas actualizar
-        if (this.shuffleActive) {
-            // Remover de shuffledQueue
-            const track = this.shuffledQueue[index];
-            this.shuffledQueue.splice(index, 1);
-
-            // También remover de queue normal
-            const normalIndex = this.queue.findIndex(t => t.id === track.id);
-            if (normalIndex !== -1) {
-                this.queue.splice(normalIndex, 1);
-            }
-        } else {
-            // Remover de queue normal
-            const track = this.queue[index];
-            this.queue.splice(index, 1);
-
-            // También remover de shuffledQueue si existe
-            if (this.shuffledQueue.length > 0) {
-                const shuffledIndex = this.shuffledQueue.findIndex(t => t.id === track.id);
-                if (shuffledIndex !== -1) {
-                    this.shuffledQueue.splice(shuffledIndex, 1);
-                }
-            }
-        }
-
-        // Ajustar currentQueueIndex si es necesario
         if (index < this.currentQueueIndex) {
-            // Si removemos una canción anterior a la actual, decrementar índice
             this.currentQueueIndex--;
-        } else if (index === this.currentQueueIndex) {
-            // Si removemos la canción actual, pausar y reproducir la siguiente
-            if (this.audio && !this.audio.paused) {
-                this.pause();
-                // Si quedan canciones, reproducir la que ahora está en ese índice
-                if (currentQueue.length > 0) {
-                    // Ajustar índice si estamos al final
-                    if (this.currentQueueIndex >= currentQueue.length) {
-                        this.currentQueueIndex = currentQueue.length - 1;
-                    }
-                    this.playTrackFromQueue();
-                } else {
-                    // Queue vacía, resetear
-                    this.currentQueueIndex = 0;
-                }
+        }
+
+        const removedTrack = currentQueue.splice(index, 1)[0];
+
+        if (this.shuffleActive) {
+            // Also remove from original queue
+            const originalIndex = this.originalQueueBeforeShuffle.findIndex((t) => t.id === removedTrack.id); // Simple ID check
+            if (originalIndex !== -1) {
+                this.originalQueueBeforeShuffle.splice(originalIndex, 1);
             }
         }
+
+        this.saveQueueState();
+        this.preloadNextTracks();
     }
 
-    moveQueueItem(fromIndex, toIndex) {
-        const currentQueue = this.getCurrentQueue();
+    clearQueue() {
+        if (this.currentTrack) {
+            this.queue = [this.currentTrack];
 
-        if (fromIndex < 0 || fromIndex >= currentQueue.length ||
-            toIndex < 0 || toIndex >= currentQueue.length ||
-            fromIndex === toIndex) {
-            return;
+            if (this.shuffleActive) {
+                this.shuffledQueue = [this.currentTrack];
+                this.originalQueueBeforeShuffle = [this.currentTrack];
+            } else {
+                this.shuffledQueue = [];
+                this.originalQueueBeforeShuffle = [];
+            }
+            this.currentQueueIndex = 0;
+        } else {
+            this.queue = [];
+            this.shuffledQueue = [];
+            this.originalQueueBeforeShuffle = [];
+            this.currentQueueIndex = -1;
         }
 
-        const trackToMove = currentQueue[fromIndex];
+        this.preloadCache.clear();
+        this.saveQueueState();
+    }
 
-        // Remove from old position
-        currentQueue.splice(fromIndex, 1);
-        // Insert at new position
-        currentQueue.splice(toIndex, 0, trackToMove);
+    moveInQueue(fromIndex, toIndex) {
+        const currentQueue = this.shuffleActive ? this.shuffledQueue : this.queue;
 
-        // Update currentQueueIndex
+        if (fromIndex < 0 || fromIndex >= currentQueue.length) return;
+        if (toIndex < 0 || toIndex >= currentQueue.length) return;
+
+        const [track] = currentQueue.splice(fromIndex, 1);
+        currentQueue.splice(toIndex, 0, track);
+
         if (this.currentQueueIndex === fromIndex) {
             this.currentQueueIndex = toIndex;
         } else if (fromIndex < this.currentQueueIndex && toIndex >= this.currentQueueIndex) {
@@ -356,79 +886,258 @@ export class Player {
         } else if (fromIndex > this.currentQueueIndex && toIndex <= this.currentQueueIndex) {
             this.currentQueueIndex++;
         }
+        this.saveQueueState();
     }
 
     getCurrentQueue() {
         return this.shuffleActive ? this.shuffledQueue : this.queue;
     }
 
+    getNextTrack() {
+        const currentQueue = this.getCurrentQueue();
+        if (this.currentQueueIndex === -1 || currentQueue.length === 0) return null;
+
+        const nextIndex = this.currentQueueIndex + 1;
+        if (nextIndex < currentQueue.length) {
+            return currentQueue[nextIndex];
+        } else if (this.repeatMode === REPEAT_MODE.ALL) {
+            return currentQueue[0];
+        }
+        return null;
+    }
+
+    loadAlbumYear(track, trackArtistsHTML, artistEl) {
+        if (!trackDateSettings.useAlbumYear()) return;
+
+        this.api
+            .getAlbum(track.album.id)
+            .then(({ album }) => {
+                if (album?.releaseDate && this.currentTrack?.id === track.id) {
+                    track.album.releaseDate = album.releaseDate;
+                    const year = new Date(album.releaseDate).getFullYear();
+                    if (!isNaN(year) && artistEl) {
+                        artistEl.innerHTML = `${trackArtistsHTML} • ${year}`;
+                    }
+                }
+            })
+            .catch(() => {});
+    }
+
     updatePlayingTrackIndicator() {
         const currentTrack = this.getCurrentQueue()[this.currentQueueIndex];
+        document.querySelectorAll('.track-item').forEach((item) => {
+            item.classList.toggle('playing', currentTrack && item.dataset.trackId == currentTrack.id);
+        });
 
-        document.querySelectorAll('.track-item').forEach(item => {
-            let isPlaying = false;
-
-            if (item.hasAttribute('data-queue-index')) {
-                // Para elementos de la cola, usar el índice exacto
-                const itemIndex = parseInt(item.dataset.queueIndex, 10);
-                isPlaying = (itemIndex === this.currentQueueIndex);
-            } else {
-                // Para otras listas (búsqueda, álbum, playlist), usar ID
-                isPlaying = (currentTrack && item.dataset.trackId == currentTrack.id);
-            }
-
-            item.classList.toggle('playing', isPlaying);
+        document.querySelectorAll('.queue-track-item').forEach((item) => {
+            const index = parseInt(item.dataset.queueIndex);
+            item.classList.toggle('playing', index === this.currentQueueIndex);
         });
     }
 
     updateMediaSession(track) {
         if (!('mediaSession' in navigator)) return;
 
-        const artwork = [];
-        const sizes = ['96', '128', '192', '256', '384', '512'];
+        // Force a refresh for picky Bluetooth systems by clearing metadata first
+        navigator.mediaSession.metadata = null;
 
+        const artwork = [];
+        const sizes = ['320'];
         const coverId = track.album?.cover;
+        const trackTitle = getTrackTitle(track);
 
         if (coverId) {
-            sizes.forEach(size => {
-                const url = this.api.getCoverUrl(coverId, size);
+            sizes.forEach((size) => {
                 artwork.push({
-                    src: url,
+                    src: this.api.getCoverUrl(coverId, size),
                     sizes: `${size}x${size}`,
-                    type: 'image/jpeg'
+                    type: 'image/jpeg',
                 });
             });
         }
 
         navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.title || 'Unknown Title',
-            artist: track.artist?.name || 'Unknown Artist',
+            title: trackTitle || 'Unknown Title',
+            artist: getTrackArtists(track) || 'Unknown Artist',
             album: track.album?.title || 'Unknown Album',
-            artwork: artwork.length > 0 ? artwork : undefined
+            artwork: artwork.length > 0 ? artwork : undefined,
         });
 
-        navigator.mediaSession.playbackState = this.audio.paused ? 'paused' : 'playing';
+        this.updateMediaSessionPlaybackState();
+        this.updateMediaSessionPositionState();
     }
 
     updateMediaSessionPlaybackState() {
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = this.audio.paused ? 'paused' : 'playing';
-        }
+        if (!('mediaSession' in navigator)) return;
+        navigator.mediaSession.playbackState = this.audio.paused ? 'paused' : 'playing';
     }
 
     updateMediaSessionPositionState() {
-        if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
-            if (this.audio.duration && !isNaN(this.audio.duration)) {
-                try {
-                    navigator.mediaSession.setPositionState({
-                        duration: this.audio.duration,
-                        playbackRate: this.audio.playbackRate,
-                        position: this.audio.currentTime
-                    });
-                } catch (error) {
-                    console.debug('Failed to update position state:', error);
-                }
+        if (!('mediaSession' in navigator)) return;
+        if (!('setPositionState' in navigator.mediaSession)) return;
+
+        const duration = this.audio.duration;
+
+        if (!duration || isNaN(duration) || !isFinite(duration)) {
+            return;
+        }
+
+        try {
+            navigator.mediaSession.setPositionState({
+                duration: duration,
+                playbackRate: this.audio.playbackRate || 1,
+                position: Math.min(this.audio.currentTime, duration),
+            });
+        } catch (error) {
+            console.log('Failed to update Media Session position:', error);
+        }
+    }
+
+    async safePlay() {
+        try {
+            await this.audio.play();
+            this.autoplayBlocked = false;
+            return true;
+        } catch (error) {
+            if (error && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+                this.autoplayBlocked = true;
+                return false;
             }
+            throw error;
+        }
+    }
+
+    async waitForCanPlayOrTimeout(timeoutMs = 10000) {
+        if (this.audio.readyState >= 2) {
+            return true;
+        }
+
+        return await new Promise((resolve, reject) => {
+            const onCanPlay = () => {
+                this.audio.removeEventListener('canplay', onCanPlay);
+                this.audio.removeEventListener('error', onError);
+                resolve(true);
+            };
+            const onError = (e) => {
+                this.audio.removeEventListener('canplay', onCanPlay);
+                this.audio.removeEventListener('error', onError);
+                reject(e);
+            };
+            this.audio.addEventListener('canplay', onCanPlay);
+            this.audio.addEventListener('error', onError);
+
+            // Timeout after 10 seconds. Treat as autoplay blocked when backgrounded (esp. iOS PWA).
+            setTimeout(() => {
+                this.audio.removeEventListener('canplay', onCanPlay);
+                this.audio.removeEventListener('error', onError);
+                if (document.visibilityState === 'hidden' || (this.isIOS && this.isPwa)) {
+                    this.autoplayBlocked = true;
+                    resolve(false);
+                    return;
+                }
+                reject(new Error('Timeout waiting for audio to load'));
+            }, timeoutMs);
+        });
+    }
+
+    // Sleep Timer Methods
+    setSleepTimer(minutes) {
+        this.clearSleepTimer(); // Clear any existing timer
+
+        this.sleepTimerEndTime = Date.now() + minutes * 60 * 1000;
+
+        this.sleepTimer = setTimeout(
+            () => {
+                this.audio.pause();
+                this.clearSleepTimer();
+                this.updateSleepTimerUI();
+            },
+            minutes * 60 * 1000
+        );
+
+        // Update UI every second
+        this.sleepTimerInterval = setInterval(() => {
+            this.updateSleepTimerUI();
+        }, 1000);
+
+        this.updateSleepTimerUI();
+    }
+
+    clearSleepTimer() {
+        if (this.sleepTimer) {
+            clearTimeout(this.sleepTimer);
+            this.sleepTimer = null;
+        }
+        if (this.sleepTimerInterval) {
+            clearInterval(this.sleepTimerInterval);
+            this.sleepTimerInterval = null;
+        }
+        this.sleepTimerEndTime = null;
+        this.updateSleepTimerUI();
+    }
+
+    getSleepTimerRemaining() {
+        if (!this.sleepTimerEndTime) return null;
+        const remaining = Math.max(0, this.sleepTimerEndTime - Date.now());
+        return Math.ceil(remaining / 1000); // Return seconds remaining
+    }
+
+    isSleepTimerActive() {
+        return this.sleepTimer !== null;
+    }
+
+    updateSleepTimerUI() {
+        const timerBtn = document.getElementById('sleep-timer-btn');
+        const timerBtnDesktop = document.getElementById('sleep-timer-btn-desktop');
+
+        const updateBtn = (btn) => {
+            if (!btn) return;
+            if (this.isSleepTimerActive()) {
+                const remaining = this.getSleepTimerRemaining();
+                if (remaining > 0) {
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = remaining % 60;
+                    btn.innerHTML = `<span style="font-size: 12px; font-weight: bold;">${minutes}:${seconds.toString().padStart(2, '0')}</span>`;
+                    btn.title = `Sleep Timer: ${minutes}:${seconds.toString().padStart(2, '0')} remaining`;
+                    btn.classList.add('active');
+                    btn.style.color = 'var(--primary)';
+                } else {
+                    btn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12,6 12,12 16,14"/>
+                        </svg>
+                    `;
+                    btn.title = 'Sleep Timer';
+                    btn.classList.remove('active');
+                    btn.style.color = '';
+                }
+            } else {
+                btn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12,6 12,12 16,14"/>
+                    </svg>
+                `;
+                btn.title = 'Sleep Timer';
+                btn.classList.remove('active');
+                btn.style.color = '';
+            }
+        };
+
+        updateBtn(timerBtn);
+        updateBtn(timerBtnDesktop);
+    }
+
+    async updateNativeWindow(track) {
+        if (!window.Neutralino) return;
+
+        const trackTitle = getTrackTitle(track);
+        const artist = getTrackArtists(track);
+        try {
+            await Neutralino.window.setTitle(`${trackTitle} • ${artist}`);
+        } catch (e) {
+            console.error('Failed to set window title:', e);
         }
     }
 }

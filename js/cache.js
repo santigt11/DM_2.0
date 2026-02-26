@@ -24,7 +24,7 @@ export class APICache {
 
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                
+
                 if (!db.objectStoreNames.contains('responses')) {
                     const store = db.createObjectStore('responses', { keyPath: 'key' });
                     store.createIndex('timestamp', 'timestamp', { unique: false });
@@ -34,15 +34,13 @@ export class APICache {
     }
 
     generateKey(type, params) {
-        const paramString = typeof params === 'object' 
-            ? JSON.stringify(params) 
-            : String(params);
+        const paramString = typeof params === 'object' ? JSON.stringify(params) : String(params);
         return `${type}:${paramString}`;
     }
 
     async get(type, params) {
         const key = this.generateKey(type, params);
-        
+
         if (this.memoryCache.has(key)) {
             const cached = this.memoryCache.get(key);
             if (Date.now() - cached.timestamp < this.ttl) {
@@ -59,7 +57,7 @@ export class APICache {
                     return cached.data;
                 }
             } catch (error) {
-                console.debug('IndexedDB read error:', error);
+                console.log('IndexedDB read error:', error);
             }
         }
 
@@ -71,7 +69,7 @@ export class APICache {
         const entry = {
             key,
             data,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
 
         this.memoryCache.set(key, entry);
@@ -85,7 +83,7 @@ export class APICache {
             try {
                 await this.setInIndexedDB(entry);
             } catch (error) {
-                console.debug('IndexedDB write error:', error);
+                console.log('IndexedDB write error:', error);
             }
         }
     }
@@ -147,7 +145,7 @@ export class APICache {
             }
         }
 
-        expired.forEach(key => this.memoryCache.delete(key));
+        expired.forEach((key) => this.memoryCache.delete(key));
 
         if (this.db) {
             try {
@@ -165,7 +163,7 @@ export class APICache {
                     }
                 };
             } catch (error) {
-                console.debug('Failed to clear expired IndexedDB entries:', error);
+                console.log('Failed to clear expired IndexedDB entries:', error);
             }
         }
     }
@@ -174,7 +172,7 @@ export class APICache {
         return {
             memoryEntries: this.memoryCache.size,
             maxSize: this.maxSize,
-            ttl: this.ttl
+            ttl: this.ttl,
         };
     }
 }
